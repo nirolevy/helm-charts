@@ -137,7 +137,8 @@ Translate `qui.*` into common library values (mutates .Values).
 {{- $_ := set $data (include "qui.envName" $key) (include "qui.envValue" $value) }}
 {{- end }}
 {{- $secrets := default dict .Values.secrets }}
-{{- $_ := set $secrets "qui-env" (dict "enabled" true "stringData" $data) }}
+{{- /* A fixed suffix: without one the library names it <fullname>, which other resources may also use. */ -}}
+{{- $_ := set $secrets "qui-env" (dict "enabled" true "suffix" "env" "stringData" $data) }}
 {{- $_ := set .Values "secrets" $secrets }}
 {{- $envFrom = append $envFrom (dict "secretRef" (dict "identifier" "qui-env")) }}
 {{- end }}
@@ -151,7 +152,7 @@ Translate `qui.*` into common library values (mutates .Values).
 {{- /* config.toml: a ConfigMap copied into /config by an init container. */ -}}
 {{- if $qui.configFile.enabled }}
 {{- $configMaps := default dict .Values.configMaps }}
-{{- $_ := set $configMaps "qui-config-file" (dict "enabled" true "data" (dict "config.toml" $qui.configFile.content)) }}
+{{- $_ := set $configMaps "qui-config-file" (dict "enabled" true "suffix" "config-file" "data" (dict "config.toml" $qui.configFile.content)) }}
 {{- $_ := set .Values "configMaps" $configMaps }}
 {{- $persistence := default dict .Values.persistence }}
 {{- $mount := list (dict "path" "/chart-config" "readOnly" true) }}

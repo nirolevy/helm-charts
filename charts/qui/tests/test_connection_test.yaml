@@ -15,3 +15,12 @@ tests:
       qui.config.baseUrl: /qui/
     asserts:
       - matchRegex: {path: "spec.containers[0].command[2]", pattern: "/healthz/readiness /qui/;"}
+  - it: uses the suffixed Service name when there are several Services
+    set:
+      service.other:
+        controller: qui
+        ports:
+          extra:
+            port: 8000
+    asserts:
+      - matchRegex: {path: "spec.containers[0].command[2]", pattern: "url=http://qui-app.media.svc:7476"}

@@ -1,6 +1,6 @@
 # qui
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.33.1](https://img.shields.io/badge/AppVersion-v1.33.1-informational?style=flat-square)
+![Version: 0.1.1](https://img.shields.io/badge/Version-0.1.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.33.1](https://img.shields.io/badge/AppVersion-v1.33.1-informational?style=flat-square)
 
 qui, a fast, modern web interface for managing multiple qBittorrent instances
 
@@ -228,11 +228,11 @@ Helm downloads that schema from `raw.githubusercontent.com`. Without internet ac
 ## Verify a release
 
 ```sh
-cosign verify ghcr.io/nirolevy/charts/qui:0.1.0 \
+cosign verify ghcr.io/nirolevy/charts/qui:0.1.1 \
   --certificate-identity-regexp '^https://github.com/nirolevy/helm-charts/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-gh attestation verify qui-0.1.0.tgz --repo nirolevy/helm-charts
+gh attestation verify qui-0.1.1.tgz --repo nirolevy/helm-charts
 ```
 
 ## Upgrading
