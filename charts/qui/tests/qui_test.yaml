@@ -144,7 +144,7 @@ tests:
         documentSelector: {path: kind, value: Secret}
       - contains:
           path: spec.template.spec.containers[0].envFrom
-          content: {secretRef: {name: qui}}
+          content: {secretRef: {name: qui-env}}
         documentSelector: {path: kind, value: Deployment}
       - exists:
           path: spec.template.metadata.annotations["checksum/secrets"]
@@ -230,3 +230,18 @@ tests:
       qui.extraArgs: [--pprof]
     asserts:
       - equal: {path: "spec.template.spec.containers[0].args", value: [serve, --pprof]}
+
+  - it: names the chart Secret and ConfigMap so other resources cannot collide with them
+    set:
+      qui.secret.values.sessionSecret: x
+      qui.configFile: {enabled: true, content: logLevel = "INFO"}
+      rawResources:
+        extra:
+          manifest: {apiVersion: v1, kind: ConfigMap, data: {hello: world}}
+    asserts:
+      - equal: {path: metadata.name, value: qui-env}
+        documentSelector: {path: kind, value: Secret}
+      - contains:
+          path: spec.template.spec.volumes
+          content: {name: qui-config-file, configMap: {name: qui-config-file}}
+        documentSelector: {path: kind, value: Deployment}
