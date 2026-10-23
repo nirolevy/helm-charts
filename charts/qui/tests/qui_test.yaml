@@ -1,0 +1,232 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/helm-unittest/helm-unittest/main/schema/helm-testsuite.json
+suite: qui values
+templates:
+  - common.yaml
+release:
+  name: qui
+  namespace: media
+chart:
+  appVersion: v9.9.9
+tests:
+  - it: renders a hardened single-replica Deployment
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal: {path: spec.replicas, value: 1}
+      - equal: {path: spec.strategy.type, value: Recreate}
+      - equal: {path: "spec.template.spec.containers[0].image", value: "ghcr.io/autobrr/qui:v9.9.9"}
+      - equal: {path: "spec.template.spec.containers[0].args", value: [serve]}
+      - equal: {path: spec.template.spec.securityContext.runAsNonRoot, value: true}
+      - equal: {path: "spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem", value: true}
+      - equal: {path: spec.template.spec.automountServiceAccountToken, value: false}
+      - equal:
+          path: spec.template.spec.containers[0].ports
+          value: [{name: http, containerPort: 7476, protocol: TCP}]
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: QUI__HOST, value: 0.0.0.0}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: QUI__PORT, value: "7476"}
+      - notExists: {path: spec.template.spec.initContainers}
+      - notExists: {path: "spec.template.spec.containers[0].envFrom"}
+
+  - it: probes send Host localhost so allowedHosts cannot block them
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet
+          value:
+            path: /healthz/readiness
+            port: http
+            httpHeaders: [{name: Host, value: localhost}]
+
+  - it: does not render unset settings
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: QUI__LOG_LEVEL}
+          any: true
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: QUI__ALLOWED_HOSTS}
+          any: true
+
+  - it: maps settings to QUI__ variables, including future ones
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      qui.config:
+        baseUrl: /qui/
+        logLevel: INFO
+        databaseSSLMode: verify-full
+        databaseMaxOpenConns: 50
+        allowedHosts: [qui.example.com, "*.home.example.com"]
+        authDisabledAllowedCIDRs: [10.0.0.0/8, 192.168.0.0/16]
+        iAcknowledgeThisIsABadIdea: true
+        checkForUpdates: false
+        oidcClientId: my-client
+        someFutureSetting: hello
+    asserts:
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__BASE_URL, value: /qui/}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__LOG_LEVEL, value: INFO}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__DATABASE_SSL_MODE, value: verify-full}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__DATABASE_MAX_OPEN_CONNS, value: "50"}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__ALLOWED_HOSTS, value: "qui.example.com,*.home.example.com"}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__AUTH_DISABLED_ALLOWED_CIDRS, value: "10.0.0.0/8,192.168.0.0/16"}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__I_ACKNOWLEDGE_THIS_IS_A_BAD_IDEA, value: "true"}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__CHECK_FOR_UPDATES, value: "false"}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__OIDC_CLIENT_ID, value: my-client}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__SOME_FUTURE_SETTING, value: hello}}
+
+  - it: takes the listen port from the Service
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      service.app.ports.http.port: 8080
+    asserts:
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__PORT, value: "8080"}}
+      - equal: {path: "spec.template.spec.containers[0].ports[0].containerPort", value: 8080}
+
+  - it: rejects a qui.config.port that differs from the Service
+    set:
+      qui.config.port: 9999
+    asserts:
+      - failedTemplate: {errorPattern: set the port in service.app.ports.http only}
+
+  - it: user env wins over chart env, as a map
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      controllers.qui.containers.app.env:
+        QUI__HOST: "::"
+        EXTRA: "1"
+    asserts:
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__HOST, value: "::"}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: EXTRA, value: "1"}}
+
+  - it: user env wins over chart env, as a list with valueFrom
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      controllers.qui.containers.app.env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__HOST, value: 0.0.0.0}}
+
+  - it: enables metrics from the Service port
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      service.app.ports.metrics.enabled: true
+    asserts:
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__METRICS_ENABLED, value: "true"}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__METRICS_HOST, value: 0.0.0.0}}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__METRICS_PORT, value: "9074"}}
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content: {name: metrics, containerPort: 9074, protocol: TCP}
+
+  - it: stores secret values in a chart Secret loaded with envFrom
+    set:
+      qui.secret.values:
+        sessionSecret: s3cr3t
+        databasePassword: pw
+    asserts:
+      - equal: {path: stringData.QUI__SESSION_SECRET, value: s3cr3t}
+        documentSelector: {path: kind, value: Secret}
+      - equal: {path: stringData.QUI__DATABASE_PASSWORD, value: pw}
+        documentSelector: {path: kind, value: Secret}
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content: {secretRef: {name: qui}}
+        documentSelector: {path: kind, value: Deployment}
+      - exists:
+          path: spec.template.metadata.annotations["checksum/secrets"]
+        documentSelector: {path: kind, value: Deployment}
+
+  - it: loads an existing Secret
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      qui.secret.existingSecret: qui-credentials
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content: {secretRef: {name: qui-credentials}}
+
+  - it: rejects a key in both config and secret
+    set:
+      qui.config.databaseUser: a
+      qui.secret.values.databaseUser: b
+    asserts:
+      - failedTemplate: {errorPattern: databaseUser is set in both qui.config and qui.secret.values}
+
+  - it: installs config.toml with an init container
+    set:
+      qui.configFile:
+        enabled: true
+        content: |
+          sessionSecret = "x"
+          externalProgramAllowList = ["/config/scripts"]
+    asserts:
+      - equal: {path: "data[\"config.toml\"]", value: "sessionSecret = \"x\"\nexternalProgramAllowList = [\"/config/scripts\"]\n"}
+        documentSelector: {path: kind, value: ConfigMap}
+      - equal: {path: "spec.template.spec.initContainers[0].name", value: config-file}
+        documentSelector: {path: kind, value: Deployment}
+      - equal: {path: "spec.template.spec.initContainers[0].image", value: "ghcr.io/autobrr/qui:v9.9.9"}
+        documentSelector: {path: kind, value: Deployment}
+      - matchRegex: {path: "spec.template.spec.initContainers[0].command[2]", pattern: Writing \$target from the chart}
+        documentSelector: {path: kind, value: Deployment}
+      - contains:
+          path: spec.template.spec.initContainers[0].volumeMounts
+          content: {name: config, mountPath: /config}
+        documentSelector: {path: kind, value: Deployment}
+      - notContains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: qui-config-file, mountPath: /chart-config, readOnly: true}
+        documentSelector: {path: kind, value: Deployment}
+
+  - it: keeps an existing config.toml when overwrite is false
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      qui.configFile: {enabled: true, overwrite: false, content: logLevel = "INFO"}
+    asserts:
+      - matchRegex: {path: "spec.template.spec.initContainers[0].command[2]", pattern: exists, keeping it}
+
+  - it: requires a session secret when the chart owns config.toml
+    set:
+      qui.configFile: {enabled: true, content: logLevel = "INFO"}
+    asserts:
+      - failedTemplate: {errorPattern: set sessionSecret}
+
+  - it: refuses RollingUpdate with a ReadWriteOnce volume
+    set:
+      controllers.qui.strategy: RollingUpdate
+    asserts:
+      - failedTemplate: {errorPattern: must be Recreate}
+
+  - it: allows RollingUpdate without persistence
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      controllers.qui.strategy: RollingUpdate
+      persistence.config.enabled: false
+    asserts:
+      - equal: {path: spec.strategy.type, value: RollingUpdate}
+
+  - it: keeps the config claim on uninstall
+    documentSelector: {path: kind, value: PersistentVolumeClaim}
+    asserts:
+      - equal: {path: "metadata.annotations[\"helm.sh/resource-policy\"]", value: keep}
+      - equal: {path: spec.resources.requests.storage, value: 1Gi}
+
+  - it: appends extraArgs to the default arguments
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      qui.extraArgs: [--pprof]
+    asserts:
+      - equal: {path: "spec.template.spec.containers[0].args", value: [serve, --pprof]}

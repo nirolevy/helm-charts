@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: qui bugs and questions
+    url: https://github.com/autobrr/qui/issues
+    about: Problems with qui itself, not the chart
+  - name: qui documentation
+    url: https://getqui.com
+    about: How qui works and how to configure it
+  - name: Common library documentation
+    url: https://bjw-s-labs.github.io/helm-charts/docs/app-template/
+    about: The values format shared by the charts

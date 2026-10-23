@@ -1,0 +1,97 @@
+name: Release
+
+# For every chart whose version changed on main:
+#   1. chart-releaser creates the GitHub release <chart>-<version> and updates the
+#      Helm repository index on the gh-pages branch (https://nirolevy.github.io/helm-charts).
+#   2. The same package is pushed to ghcr.io as an OCI artifact, signed with cosign
+#      and given a build provenance attestation.
+on:
+  push:
+    branches: [main]
+    paths:
+      - charts/**
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # renovate: datasource=github-releases depName=helm/helm
+  HELM_VERSION: v4.3.1
+
+jobs:
+  release:
+    name: Release charts
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write # GitHub releases and the gh-pages index
+      packages: write # push to ghcr.io
+      id-token: write # keyless signing and attestations
+      attestations: write # build provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true # zizmor: ignore[artipacked] chart-releaser pushes the index to gh-pages
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Check chart sources
+        run: |
+          for chart in charts/*/Chart.yaml; do
+            source=$(yq '.sources[0]' "$chart")
+            if [ "$source" != "https://github.com/$GITHUB_REPOSITORY" ]; then
+              echo "::error file=$chart::sources[0] must be https://github.com/$GITHUB_REPOSITORY (ghcr.io links the package to it)"
+              exit 1
+            fi
+          done
+
+      - name: Run chart-releaser
+        id: cr
+        uses: helm/chart-releaser-action@cae68fefc6b5f367a0275617c9f83181ba54714f # v1.7.0
+        with:
+          config: .github/cr.yaml
+          skip_existing: true
+        env:
+          CR_TOKEN: ${{ github.token }}
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: steps.cr.outputs.changed_charts != ''
+
+      - name: Push to ghcr.io and sign
+        if: steps.cr.outputs.changed_charts != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"
+          echo "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          echo "$GITHUB_TOKEN" | cosign login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          for package in .cr-release-packages/*.tgz; do
+            name=$(helm show chart "$package" | yq '.name')
+            helm push "$package" "oci://$registry" 2>&1 | tee push.log
+            digest=$(grep -oE 'sha256:[a-f0-9]{64}' push.log | tail -1)
+            if [ -z "$digest" ]; then
+              echo "::error::Could not read the digest of $package"
+              exit 1
+            fi
+            cosign sign --yes "$registry/$name@$digest"
+            echo "Pushed and signed $registry/$name@$digest" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      # Covers the .tgz files in the GitHub release and the Pages index. The OCI layer is the same file.
+      - name: Attest the release packages
+        if: steps.cr.outputs.changed_charts != ''
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: .cr-release-packages/*.tgz

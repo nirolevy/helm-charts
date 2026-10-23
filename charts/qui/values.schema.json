@@ -1,0 +1,386 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qui chart values",
+  "allOf": [
+    {
+      "$ref": "https://raw.githubusercontent.com/bjw-s-labs/helm-charts/common-5.3.0/charts/library/common/values.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "qui": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "config",
+            "secret",
+            "configFile"
+          ],
+          "properties": {
+            "config": {
+              "description": "qui settings by config.toml name, rendered as QUI__ variables. Unknown keys are allowed for settings added by newer qui versions.",
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "port": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "baseUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "corsAllowedOrigins": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "allowedHosts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "sessionCookieSecure": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "logLevel": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    null,
+                    "ERROR",
+                    "WARN",
+                    "INFO",
+                    "DEBUG",
+                    "TRACE",
+                    "error",
+                    "warn",
+                    "info",
+                    "debug",
+                    "trace"
+                  ]
+                },
+                "logPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "logMaxSize": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "logMaxBackups": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "dataDir": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "backupDir": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "customThemesDir": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "databaseEngine": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    null,
+                    "sqlite",
+                    "postgres"
+                  ]
+                },
+                "databaseHost": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "databasePort": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "databaseUser": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "databaseName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "databaseSSLMode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    null,
+                    "disable",
+                    "allow",
+                    "prefer",
+                    "require",
+                    "verify-ca",
+                    "verify-full"
+                  ]
+                },
+                "databaseConnectTimeout": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "databaseMaxOpenConns": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "databaseMaxIdleConns": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "databaseConnMaxLifetime": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "qbittorrentTimeout": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "checkForUpdates": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "disableSelfUpdate": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "trackerIconsFetchEnabled": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "crossSeedRecoverErroredTorrents": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "externalProgramMaxRunning": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "pprofEnabled": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "pprofAddr": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "metricsEnabled": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "metricsHost": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "metricsPort": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "authDisabled": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "iAcknowledgeThisIsABadIdea": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "authDisabledAllowedCIDRs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "oidcEnabled": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "oidcIssuer": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "oidcClientId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "oidcRedirectUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "oidcDisableBuiltInLogin": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              },
+              "propertyNames": {
+                "pattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+              },
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "array",
+                  "null"
+                ]
+              }
+            },
+            "secret": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "values": {
+                  "type": "object",
+                  "propertyNames": {
+                    "pattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+                  },
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number",
+                      "boolean"
+                    ]
+                  }
+                },
+                "existingSecret": {
+                  "type": "string"
+                }
+              }
+            },
+            "configFile": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "overwrite": {
+                  "type": "boolean"
+                },
+                "content": {
+                  "type": "string"
+                }
+              }
+            },
+            "extraArgs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "common": {
+          "description": "Defaults of the bjw-s common library dependency. Do not set.",
+          "type": "object"
+        },
+        "global": {
+          "type": "object"
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

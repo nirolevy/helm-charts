@@ -1,0 +1,49 @@
+{{- include "bjw-s.common.loader.init" . }}
+{{- $fullname := include "bjw-s.common.lib.chart.names.fullname" . }}
+{{- $port := dig "service" "app" "ports" "http" "port" 7476 .Values }}
+{{- $base := trimAll "/" (toString (default "" .Values.qui.config.baseUrl)) }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ $fullname }}-test-connection
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "bjw-s.common.lib.chart.names.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: wget
+      image: docker.io/library/busybox:1.37.0
+      command:
+        - /bin/sh
+        - -ec
+        - |
+          url=http://{{ $fullname }}.{{ .Release.Namespace }}.svc:{{ $port }}
+          for path in /health /healthz/readiness /{{ with $base }}{{ . }}/{{ end }}; do
+            echo "GET $url$path"
+            wget -q -O /dev/null -T 10 --header "Host: localhost" "$url$path"
+          done
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          memory: 32Mi

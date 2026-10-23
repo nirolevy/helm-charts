@@ -1,0 +1,250 @@
+# qui
+
+{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+
+{{ template "chart.description" . }}
+
+[qui](https://github.com/autobrr/qui) is made by the autobrr project. This chart is a community project and is not affiliated with it.
+
+## Install
+
+From the Helm repository:
+
+```sh
+helm repo add nirolevy https://nirolevy.github.io/helm-charts
+helm install qui nirolevy/qui --namespace qui --create-namespace
+```
+
+Or from the OCI registry:
+
+```sh
+helm install qui oci://ghcr.io/nirolevy/charts/qui --namespace qui --create-namespace
+```
+
+Then open the UI and create the admin account:
+
+```sh
+kubectl --namespace qui port-forward svc/qui 7476
+```
+
+Requirements: Kubernetes `{{ template "chart.kubeVersion" . }}`, Helm 3.8 or later.
+
+## How the chart works
+
+The chart is built on the [bjw-s common library](https://github.com/bjw-s-labs/helm-charts) ({{ range .Dependencies }}{{ if eq .Name "common" }}`{{ .Version }}`{{ end }}{{ end }}),
+the library behind [app-template](https://bjw-s-labs.github.io/helm-charts/docs/app-template/).
+Workloads, volumes, Services, Ingress, Gateway API routes, ServiceMonitors, NetworkPolicies and extra resources use its
+values format. The [app-template documentation](https://bjw-s-labs.github.io/helm-charts/docs/app-template/) describes every option.
+
+On top of the library, the chart adds `qui`:
+
+- **`qui.config`**: every qui setting by its `config.toml` name. Each key becomes a `QUI__*` variable, for example
+  `logLevel` becomes `QUI__LOG_LEVEL`. Unset keys are not rendered. Settings that a newer qui adds work without
+  a chart update: `someNewSetting` becomes `QUI__SOME_NEW_SETTING`.
+- **`qui.secret`**: credentials, from `values` (the chart creates a Secret) or from `existingSecret`.
+- **`qui.configFile`**: a full `config.toml`, for settings without a variable such as `externalProgramAllowList`.
+- **`qui.extraArgs`**: arguments appended after `serve`.
+
+The chart also sets the listen port from `service.app.ports.http`, enables the metrics server when
+`service.app.ports.metrics` is enabled, and sends probes with `Host: localhost` so `allowedHosts` cannot block them.
+
+Settings set through variables are locked in the qui UI.
+
+For anything else, use the library directly: `controllers.qui.containers.app.env`, `envFrom`, `args`, `command`,
+extra `persistence` entries, sidecars under `controllers.qui.containers`, init containers, or `rawResources`.
+Keep the identifiers `controllers.qui`, its container `app`, and `service.app`.
+
+## Examples
+
+### Ingress with TLS
+
+```yaml
+qui:
+  config:
+    allowedHosts: [qui.example.com]
+    sessionCookieSecure: true
+ingress:
+  app:
+    className: nginx
+    hosts:
+      - host: qui.example.com
+        paths:
+          - path: /
+            service:
+              identifier: app
+              port: http
+    tls:
+      - hosts: [qui.example.com]
+        secretName: qui-tls
+```
+
+### Gateway API
+
+```yaml
+route:
+  app:
+    parentRefs:
+      - name: public
+        namespace: gateway
+    hostnames: [qui.example.com]
+    rules:
+      - backendRefs:
+          - identifier: app
+            port: 7476
+```
+
+### Session secret
+
+qui encrypts stored qBittorrent passwords with the session secret. Without one, qui generates a secret on first start
+and keeps it in `config.toml` on the config volume. To manage it yourself:
+
+```sh
+kubectl --namespace qui create secret generic qui-env \
+  --from-literal=QUI__SESSION_SECRET="$(openssl rand -hex 32)"
+```
+
+```yaml
+qui:
+  secret:
+    existingSecret: qui-env
+```
+
+On an existing install, reuse the `sessionSecret` from `/config/config.toml`. A new value makes stored credentials unreadable.
+
+### Postgres
+
+```yaml
+qui:
+  config:
+    databaseEngine: postgres
+  secret:
+    existingSecret: qui-env # QUI__DATABASE_DSN=postgres://user:password@host:5432/qui?sslmode=require
+```
+
+### OIDC
+
+```yaml
+qui:
+  config:
+    oidcEnabled: true
+    oidcIssuer: https://auth.example.com
+    oidcClientId: qui
+    oidcRedirectUrl: https://qui.example.com/api/auth/oidc/callback
+  secret:
+    existingSecret: qui-env # QUI__OIDC_CLIENT_SECRET
+```
+
+### Local filesystem access
+
+Orphan scan, hardlinks, reflinks and path-based automations need the paths qBittorrent uses, at the same location:
+
+```yaml
+persistence:
+  downloads:
+    existingClaim: downloads
+    advancedMounts:
+      qui:
+        app:
+          - path: /downloads
+defaultPodOptions:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000 # the owner of the downloads
+    runAsGroup: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+```
+
+Then enable **Local Filesystem Access** for the instance in the qui UI.
+
+### Prometheus metrics
+
+```yaml
+service:
+  app:
+    ports:
+      metrics:
+        enabled: true
+serviceMonitor:
+  app:
+    labels:
+      release: kube-prometheus-stack
+    service:
+      identifier: app
+    endpoints:
+      - port: metrics
+        path: /metrics
+        interval: 30s
+```
+
+### Settings without a variable
+
+```yaml
+qui:
+  configFile:
+    enabled: true
+    overwrite: true # the chart owns config.toml; log settings changed in the UI reset on restart
+    content: |
+      externalProgramAllowList = ["/config/scripts"]
+  secret:
+    existingSecret: qui-env # must contain QUI__SESSION_SECRET when overwrite is true
+```
+
+### Anything else
+
+```yaml
+controllers:
+  qui:
+    containers:
+      app:
+        env:
+          TZ: Europe/Berlin
+          QUI__SESSION_SECRET_FILE: /secrets/session
+qui:
+  extraArgs: [--pprof]
+persistence:
+  secrets:
+    type: secret
+    name: qui-files
+    advancedMounts:
+      qui:
+        app:
+          - path: /secrets
+            readOnly: true
+```
+
+## Security defaults
+
+The pod runs as user 1000:1000 with a read-only root filesystem, no capabilities, `RuntimeDefault` seccomp and no
+ServiceAccount token. qui writes only to `/config` and `/tmp`.
+
+## Schema validation
+
+`values.schema.json` checks the `qui` values and, through the library's published schema, everything else.
+Helm downloads that schema from `raw.githubusercontent.com`. Without internet access, install with `--skip-schema-validation`.
+
+## Verify a release
+
+```sh
+cosign verify ghcr.io/nirolevy/charts/qui:{{ template "chart.version" . }} \
+  --certificate-identity-regexp '^https://github.com/nirolevy/helm-charts/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+gh attestation verify qui-{{ template "chart.version" . }}.tgz --repo nirolevy/helm-charts
+```
+
+## Upgrading
+
+The chart follows [semantic versioning](https://semver.org). Major versions list required value changes here.
+
+## Uninstall
+
+```sh
+helm uninstall qui --namespace qui
+```
+
+The config PersistentVolumeClaim is kept (`persistence.config.retain`). Delete it yourself to remove the data.
+
+{{ template "chart.valuesSection" . }}

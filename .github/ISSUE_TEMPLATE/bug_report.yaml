@@ -1,0 +1,52 @@
+name: Bug report
+description: The chart renders or deploys something wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for problems with a chart. Report problems with an application to its own project.
+        Remove secrets from everything you paste.
+  - type: dropdown
+    id: chart
+    attributes:
+      label: Chart
+      options:
+        - qui
+    validations:
+      required: true
+  - type: input
+    id: chart-version
+    attributes:
+      label: Chart version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Helm and Kubernetes versions
+      placeholder: Helm v4.3.1, Kubernetes v1.34.2
+    validations:
+      required: true
+  - type: textarea
+    id: values
+    attributes:
+      label: Values
+      description: The values you pass to the chart (secrets removed).
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Include error messages, `helm template` output or pod logs.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true

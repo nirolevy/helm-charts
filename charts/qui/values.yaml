@@ -1,0 +1,233 @@
+# yaml-language-server: $schema=./values.schema.json
+
+# This chart is built on the bjw-s common library. Everything outside `qui` follows the
+# common library values format: https://bjw-s-labs.github.io/helm-charts/docs/app-template/
+# The chart uses the controller `qui`, its container `app` and the Service `app`. Keep these identifiers.
+
+qui:
+  # -- qui settings, rendered as `QUI__*` environment variables on the `app` container.
+  # Keys are the `config.toml` names from the [configuration reference](https://getqui.com/docs/configuration/reference).
+  # Unset (`null`) keys are not rendered, so qui keeps its default or the value in `config.toml`.
+  # Lists render comma-separated. A key the chart does not list still works: `fooBarBaz` renders as `QUI__FOO_BAR_BAZ`.
+  # Variables lock the matching fields in the qui UI.
+  # The chart sets `port` from `service.app.ports.http`, and the metrics settings from `service.app.ports.metrics`.
+  # Put credentials in `qui.secret`.
+  # @default -- see below
+  config:
+    # -- Listen address.
+    host: "0.0.0.0"
+    # -- (string) Serve qui from a sub path, for example `/qui/`.
+    baseUrl:
+    # -- Explicit CORS origins. Empty disables CORS.
+    corsAllowedOrigins: []
+    # -- Allowed `Host` values (hostnames, IPs or `*.` wildcards). Empty allows any host.
+    # The default probes send `Host: localhost`, which qui always allows.
+    allowedHosts: []
+    # -- (bool) Send the session cookie only over HTTPS. Enable behind an HTTPS ingress.
+    sessionCookieSecure:
+    # -- (string) Log level: `ERROR`, `WARN`, `INFO`, `DEBUG` or `TRACE`. qui defaults to `DEBUG`.
+    logLevel:
+    # -- (string) Log file path. Unset logs to stdout.
+    logPath:
+    # -- (int) Log size in MB that starts a rotation (with `logPath`).
+    logMaxSize:
+    # -- (int) Rotated log files to keep, 0 keeps all (with `logPath`).
+    logMaxBackups:
+    # -- (string) Directory for the SQLite database, tracker icons and backups. Defaults to `/config`.
+    dataDir:
+    # -- (string) Backup directory. Defaults to `<dataDir>/backups`.
+    backupDir:
+    # -- (string) Directory for custom theme `.css` files. Defaults to `/config/themes`.
+    customThemesDir:
+    # -- (string) Database engine: `sqlite` or `postgres`.
+    databaseEngine:
+    # -- (string) Postgres host, when not using a DSN.
+    databaseHost:
+    # -- (int) Postgres port, when not using a DSN.
+    databasePort:
+    # -- (string) Postgres user, when not using a DSN.
+    databaseUser:
+    # -- (string) Postgres database name, when not using a DSN.
+    databaseName:
+    # -- (string) Postgres SSL mode: `disable`, `require`, `verify-ca` or `verify-full`.
+    databaseSSLMode:
+    # -- (int) Postgres connect timeout in seconds.
+    databaseConnectTimeout:
+    # -- (int) Postgres pool maximum open connections.
+    databaseMaxOpenConns:
+    # -- (int) Postgres pool maximum idle connections.
+    databaseMaxIdleConns:
+    # -- (int) Postgres maximum connection lifetime in seconds.
+    databaseConnMaxLifetime:
+    # -- (int) HTTP timeout in seconds for requests to qBittorrent.
+    qbittorrentTimeout:
+    # -- (bool) Check for new qui releases.
+    checkForUpdates:
+    # -- (bool) Hide Self-update in the UI. qui already disables it in Kubernetes.
+    disableSelfUpdate:
+    # -- (bool) Fetch tracker favicons from trackers.
+    trackerIconsFetchEnabled:
+    # -- (bool) Let cross-seed recover errored or missingFiles torrents (slow).
+    crossSeedRecoverErroredTorrents:
+    # -- (int) Maximum number of external programs that run at the same time.
+    externalProgramMaxRunning:
+    # -- (bool) Enable the pprof server.
+    pprofEnabled:
+    # -- (string) pprof bind address.
+    pprofAddr:
+    # -- (bool) Disable built-in authentication. Needs `iAcknowledgeThisIsABadIdea` and `authDisabledAllowedCIDRs`.
+    authDisabled:
+    # -- (bool) Confirmation required to disable authentication.
+    iAcknowledgeThisIsABadIdea:
+    # -- IPs or CIDRs allowed when authentication is disabled.
+    authDisabledAllowedCIDRs: []
+    # -- (bool) Enable OpenID Connect login.
+    oidcEnabled:
+    # -- (string) OIDC issuer URL.
+    oidcIssuer:
+    # -- (string) OIDC client ID.
+    oidcClientId:
+    # -- (string) OIDC redirect URL, for example `https://qui.example.com/api/auth/oidc/callback`.
+    oidcRedirectUrl:
+    # -- (bool) Hide the built-in login form (with OIDC).
+    oidcDisableBuiltInLogin:
+
+  secret:
+    # -- Credentials by `config.toml` name (`sessionSecret`, `databasePassword`, `databaseDsn`,
+    # `oidcClientSecret`, `metricsBasicAuthUsers`, ...). Stored in a Secret the chart creates.
+    # Prefer `existingSecret`, so credentials stay out of values files.
+    values: {}
+    # -- Existing Secret loaded with `envFrom`. Its keys must be variable names, for example `QUI__SESSION_SECRET`.
+    existingSecret: ""
+
+  # -- Arguments appended to `controllers.qui.containers.app.args`, for example `["--pprof"]`.
+  # For extra environment variables use `controllers.qui.containers.app.env` (map or list) and `envFrom`.
+  extraArgs: []
+
+  configFile:
+    # -- Write `config.toml` before qui starts, for settings without a variable (for example `externalProgramAllowList`).
+    # Variables from `qui.config` and `qui.secret` still win.
+    enabled: false
+    # -- `true` replaces `config.toml` on every start. `false` writes it only if none exists.
+    overwrite: true
+    # -- `config.toml` content (TOML, templated). With `overwrite`, set `sessionSecret` here or in `qui.secret`,
+    # or qui generates a new one on every start and cannot decrypt stored credentials.
+    content: ""
+
+defaultPodOptions:
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+
+controllers:
+  qui:
+    type: deployment
+    # qui keeps state on a ReadWriteOnce volume and runs background jobs: one replica, replaced not rolled.
+    replicas: 1
+    strategy: Recreate
+    containers:
+      app:
+        image:
+          repository: ghcr.io/autobrr/qui
+          tag: "{{ .Chart.AppVersion }}"
+          pullPolicy: IfNotPresent
+        args:
+          - serve
+        probes:
+          startup:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /healthz/liveness
+                port: http
+                httpHeaders:
+                  - name: Host
+                    value: localhost
+              periodSeconds: 5
+              timeoutSeconds: 3
+              failureThreshold: 60
+          liveness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /healthz/liveness
+                port: http
+                httpHeaders:
+                  - name: Host
+                    value: localhost
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+          readiness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /healthz/readiness
+                port: http
+                httpHeaders:
+                  - name: Host
+                    value: localhost
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 1Gi
+
+service:
+  app:
+    controller: qui
+    ports:
+      http:
+        port: 7476
+      metrics:
+        # -- Expose the qui metrics server. The chart enables it in qui and binds it to all interfaces.
+        enabled: false
+        port: 9074
+
+persistence:
+  config:
+    # -- Persist `/config` (config.toml, SQLite database, backups). Set `existingClaim` to reuse a claim.
+    enabled: true
+    type: persistentVolumeClaim
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    # -- Keep the claim when the release is uninstalled.
+    retain: true
+    # The chart also mounts it into its config-file init container.
+    advancedMounts:
+      qui:
+        app:
+          - path: /config
+  tmp:
+    type: emptyDir
+    sizeLimit: 256Mi
+    advancedMounts:
+      qui:
+        app:
+          - path: /tmp
+
+# Ingress, Gateway API routes, ServiceMonitor and NetworkPolicy use the common library format. See README.md for examples.
+ingress: {}
+route: {}
+serviceMonitor: {}
+networkpolicies: {}

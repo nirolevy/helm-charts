@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/helm-unittest/helm-unittest/main/schema/helm-testsuite.json
+suite: helm test pod
+templates:
+  - tests/test-connection.yaml
+release:
+  name: qui
+  namespace: media
+tests:
+  - it: checks the health endpoints through the Service
+    asserts:
+      - equal: {path: "metadata.annotations[\"helm.sh/hook\"]", value: test}
+      - matchRegex: {path: "spec.containers[0].command[2]", pattern: "url=http://qui.media.svc:7476"}
+  - it: also checks the UI under baseUrl
+    set:
+      qui.config.baseUrl: /qui/
+    asserts:
+      - matchRegex: {path: "spec.containers[0].command[2]", pattern: "/healthz/readiness /qui/;"}

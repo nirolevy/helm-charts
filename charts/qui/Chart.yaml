@@ -1,0 +1,37 @@
+apiVersion: v2
+name: qui
+description: qui, a fast, modern web interface for managing multiple qBittorrent instances
+type: application
+version: 0.1.0
+# renovate: datasource=docker depName=ghcr.io/autobrr/qui
+appVersion: v1.33.1
+kubeVersion: ">=1.31.0-0"
+home: https://getqui.com
+icon: https://raw.githubusercontent.com/autobrr/qui/main/web/public/icon.png
+# The first source is this repository: ghcr.io links the published package to it.
+sources:
+  - https://github.com/nirolevy/helm-charts
+  - https://github.com/autobrr/qui
+keywords:
+  - qui
+  - qbittorrent
+  - torrent
+  - autobrr
+  - cross-seed
+dependencies:
+  - name: common
+    repository: oci://ghcr.io/bjw-s-labs/helm
+    version: 5.3.0
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: integration-delivery
+  artifacthub.io/links: |
+    - name: qui documentation
+      url: https://getqui.com
+    - name: qui source
+      url: https://github.com/autobrr/qui
+    - name: bjw-s common library (app-template) documentation
+      url: https://bjw-s-labs.github.io/helm-charts/docs/app-template/
+  artifacthub.io/images: |
+    - name: qui
+      image: ghcr.io/autobrr/qui:v1.33.1

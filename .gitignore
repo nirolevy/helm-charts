@@ -1,0 +1,9 @@
+# Dependencies pulled by `helm dependency build`
+charts/*/charts/
+charts/*/Chart.lock
+.cr-release-packages/
+.cr-index/
+*.tgz
+.idea/
+.vscode/
+.DS_Store

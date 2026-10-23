@@ -1,0 +1,85 @@
+name: qui settings
+
+# Weekly, and after qui updates: list qui settings that values.yaml does not document yet.
+# The chart keeps working without them (any `qui.config` key or container env var works),
+# so this opens or updates an issue instead of failing CI.
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - charts/qui/Chart.yaml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=github-releases depName=helm/helm
+  HELM_VERSION: v4.3.1
+  ISSUE_TITLE: "qui: values.yaml does not document every qui setting"
+
+jobs:
+  check:
+    name: Check qui settings
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # open or update the reminder issue
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Compare with the deployed qui version
+        id: check
+        run: |
+          pip install --disable-pip-version-check pyyaml==6.0.3
+          helm dependency build charts/qui
+          if python3 hack/check-qui-config.py > report.txt 2>&1; then
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          fi
+          cat report.txt
+
+      - name: Open or update the issue
+        if: steps.check.outputs.missing == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          app_version=$(yq '.appVersion' charts/qui/Chart.yaml)
+          {
+            echo "qui \`$app_version\` reads settings that \`charts/qui/values.yaml\` does not list under \`qui.config\`."
+            echo "They already work as \`qui.config\` keys; listing them adds documentation and schema checks."
+            echo
+            echo '```'
+            cat report.txt
+            echo '```'
+          } > body.md
+          number=$(gh issue list --state open --search "\"$ISSUE_TITLE\" in:title" --json number --jq '.[0].number')
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body-file body.md
+          else
+            gh issue create --title "$ISSUE_TITLE" --body-file body.md
+          fi
+
+      - name: Close the issue when everything is documented
+        if: steps.check.outputs.missing == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number=$(gh issue list --state open --search "\"$ISSUE_TITLE\" in:title" --json number --jq '.[0].number')
+          if [ -n "$number" ]; then
+            gh issue close "$number" --comment "values.yaml now lists every qui setting."
+          fi

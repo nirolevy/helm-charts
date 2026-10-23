@@ -1,0 +1,55 @@
+# Run qui against Postgres. The database is deployed with rawResources for the test only.
+persistence:
+  config:
+    enabled: false
+  config-dir:
+    type: emptyDir
+    advancedMounts:
+      qui:
+        app:
+          - path: /config
+qui:
+  config:
+    databaseEngine: postgres
+    databaseHost: "{{ .Release.Name }}-postgres"
+    databaseUser: qui
+    databaseName: qui
+  secret:
+    values:
+      sessionSecret: ci-only-session-secret-0123456789abcdef
+      databasePassword: ci-only-password
+controllers:
+  postgres:
+    type: deployment
+    containers:
+      db:
+        image:
+          repository: docker.io/library/postgres
+          tag: 17-alpine
+        env:
+          POSTGRES_USER: qui
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: qui
+        probes:
+          readiness:
+            enabled: true
+            custom: true
+            spec:
+              exec:
+                command: [pg_isready, -U, qui, -d, qui]
+              periodSeconds: 5
+        securityContext:
+          runAsUser: 70
+          runAsGroup: 70
+    pod:
+      securityContext:
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+service:
+  postgres:
+    controller: postgres
+    forceRename: "{{ .Release.Name }}-postgres"
+    ports:
+      postgres:
+        port: 5432

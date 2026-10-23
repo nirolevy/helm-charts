@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest a new chart option or behavior
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can you not do with the chart today? The common library values (env, args, persistence, rawResources, ...) cover many cases.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed values
+      render: yaml

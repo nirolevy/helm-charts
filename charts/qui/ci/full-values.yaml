@@ -1,0 +1,69 @@
+# Exercise the qui layer and common library features in one install.
+qui:
+  config:
+    logLevel: INFO
+    baseUrl: /qui/
+    allowedHosts: [qui.example.com]
+    checkForUpdates: false
+    trackerIconsFetchEnabled: false
+    qbittorrentTimeout: 30
+  secret:
+    values:
+      sessionSecret: ci-only-session-secret-0123456789abcdef
+      metricsBasicAuthUsers: prometheus:ci-only-password
+  configFile:
+    enabled: true
+    content: |
+      externalProgramAllowList = ["/usr/local/bin"]
+controllers:
+  qui:
+    annotations:
+      ci/release: "{{ .Release.Name }}"
+    containers:
+      app:
+        env:
+          TZ: Etc/UTC
+          UMASK: "002"
+          POD_NAME:
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+service:
+  app:
+    ports:
+      metrics:
+        enabled: true
+persistence:
+  downloads:
+    type: emptyDir
+    advancedMounts:
+      qui:
+        app:
+          - path: /downloads
+ingress:
+  app:
+    hosts:
+      - host: qui.example.com
+        paths:
+          - path: /qui
+            service:
+              identifier: app
+              port: http
+networkpolicies:
+  app:
+    controller: qui
+    policyTypes: [Ingress]
+    rules:
+      ingress:
+        - ports:
+            - port: 7476
+              protocol: TCP
+            - port: 9074
+              protocol: TCP
+rawResources:
+  extra:
+    manifest:
+      apiVersion: v1
+      kind: ConfigMap
+      data:
+        hello: world

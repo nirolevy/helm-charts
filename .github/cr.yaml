@@ -1,0 +1,3 @@
+# chart-releaser configuration: https://github.com/helm/chart-releaser
+# Release notes list the pull requests merged since the previous release.
+generate-release-notes: true
