@@ -71,7 +71,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             charts=$(ct list-changed --config ct.yaml | tr '\n' ' ')
           else
-            charts=$(ls -d charts/*/ | sed 's#/$##' | tr '\n' ' ')
+            charts=$(find charts -mindepth 1 -maxdepth 1 -type d | sort | tr '\n' ' ')
           fi
           echo "Charts: $charts"
           echo "charts=$charts" >> "$GITHUB_OUTPUT"

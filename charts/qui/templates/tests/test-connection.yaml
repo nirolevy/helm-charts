@@ -1,5 +1,7 @@
 {{- include "bjw-s.common.loader.init" . }}
 {{- $fullname := include "bjw-s.common.lib.chart.names.fullname" . }}
+{{- /* The library adds a suffix to Service names when there are several Services, so ask it for the name. */ -}}
+{{- $service := include "bjw-s.common.lib.service.getByIdentifier" (dict "rootContext" $ "id" "app") | fromYaml }}
 {{- $port := dig "service" "app" "ports" "http" "port" 7476 .Values }}
 {{- $base := trimAll "/" (toString (default "" .Values.qui.config.baseUrl)) }}
 apiVersion: v1
@@ -30,7 +32,7 @@ spec:
         - /bin/sh
         - -ec
         - |
-          url=http://{{ $fullname }}.{{ .Release.Namespace }}.svc:{{ $port }}
+          url=http://{{ $service.name }}.{{ .Release.Namespace }}.svc:{{ $port }}
           for path in /health /healthz/readiness /{{ with $base }}{{ . }}/{{ end }}; do
             echo "GET $url$path"
             wget -q -O /dev/null -T 10 --header "Host: localhost" "$url$path"
