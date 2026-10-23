@@ -37,7 +37,13 @@ jobs:
       - name: Run hooks
         run: |
           pip install --disable-pip-version-check "pre-commit==${PRE_COMMIT_VERSION}"
-          pre-commit run --all-files --show-diff-on-failure --color always
+          pre-commit run --all-files --show-diff-on-failure --color never 2>&1 | tee pre-commit.log
+          exit "${PIPESTATUS[0]}"
+
+      # Puts the end of the output in an annotation, so it shows on the pull request without opening the log.
+      - name: Annotate failure
+        if: failure()
+        run: hack/annotate.sh pre-commit pre-commit.log
 
   lint-test:
     name: Lint and unit tests
@@ -128,17 +134,26 @@ jobs:
       # On pull requests it also upgrades from the version on main.
       - name: chart-testing install
         run: |
+          set -o pipefail
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            ct install --config ct.yaml --upgrade
+            ct install --config ct.yaml --upgrade 2>&1 | tee ct.log
           else
-            ct install --config ct.yaml --all
+            ct install --config ct.yaml --all 2>&1 | tee ct.log
           fi
 
-      - name: Show cluster state on failure
+      - name: Annotate failure
         if: failure()
+        env:
+          K8S: ${{ matrix.k8s }}
         run: |
-          kubectl get all,pvc,events --all-namespaces
-          kubectl logs --all-namespaces --selector app.kubernetes.io/instance --all-containers --tail=200 --prefix
+          {
+            grep -vE '^\s*$' ct.log | tail -n 60
+            echo '--- pods'
+            kubectl get pods --all-namespaces -o wide
+            echo '--- warning events'
+            kubectl get events --all-namespaces --field-selector type=Warning --sort-by=.lastTimestamp | tail -n 30
+          } > failure.txt 2>&1 || true
+          hack/annotate.sh "install on $K8S" failure.txt
 
   # The single check to require in branch protection.
   ci-ok:
