@@ -41,3 +41,8 @@ python3 hack/check-qui-config.py              # qui only: list qui settings miss
 ## Releases
 
 Merging a new chart version into `main` releases it. No manual steps.
+
+Each pull request bumps the version of the charts it changes (the chart-testing convention). A pull request
+must be up to date with `main` before it merges, so CI checks its version against the latest release and two
+pull requests cannot claim the same version. Renovate rebases its pull requests when `main` moves. As a last
+guard, the release workflow fails instead of reusing or overwriting a released version.
