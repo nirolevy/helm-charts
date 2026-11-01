@@ -1,6 +1,7 @@
 # qui
 
-{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+<!-- No version badges: Renovate changes versions without running helm-docs, so this file must not depend on them.
+     Chart and app versions are on the releases page and in `helm search repo nirolevy/qui`. -->
 
 {{ template "chart.description" . }}
 
@@ -31,7 +32,7 @@ Requirements: Kubernetes `{{ template "chart.kubeVersion" . }}`, Helm 3.8 or lat
 
 ## How the chart works
 
-The chart is built on the [bjw-s common library](https://github.com/bjw-s-labs/helm-charts) ({{ range .Dependencies }}{{ if eq .Name "common" }}`{{ .Version }}`{{ end }}{{ end }}),
+The chart is built on the [bjw-s common library](https://github.com/bjw-s-labs/helm-charts),
 the library behind [app-template](https://bjw-s-labs.github.io/helm-charts/docs/app-template/).
 Workloads, volumes, Services, Ingress, Gateway API routes, ServiceMonitors, NetworkPolicies and extra resources use its
 values format. The [app-template documentation](https://bjw-s-labs.github.io/helm-charts/docs/app-template/) describes every option.
@@ -227,12 +228,14 @@ Helm downloads that schema from `raw.githubusercontent.com`. Without internet ac
 
 ## Verify a release
 
+Replace `<version>` with a chart version from the [releases](https://github.com/nirolevy/helm-charts/releases).
+
 ```sh
-cosign verify ghcr.io/nirolevy/charts/qui:{{ template "chart.version" . }} \
+cosign verify ghcr.io/nirolevy/charts/qui:<version> \
   --certificate-identity-regexp '^https://github.com/nirolevy/helm-charts/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-gh attestation verify qui-{{ template "chart.version" . }}.tgz --repo nirolevy/helm-charts
+gh attestation verify qui-<version>.tgz --repo nirolevy/helm-charts
 ```
 
 ## Upgrading
