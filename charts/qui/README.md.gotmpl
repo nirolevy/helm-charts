@@ -190,6 +190,9 @@ The PrometheusRule has these alerts: `QuiDown` (Prometheus cannot scrape qui), `
 `QuiCollectionErrors` and `QuiDatabaseWedgedTransactions`. Leave some out with `disabledAlerts`, label them with
 `alertLabels`, and add your own with `additionalRules`. A disabled qBittorrent instance also counts as down.
 
+CI applies the Prometheus Operator and Grafana Operator CRDs to its test clusters, so the API server validates all three
+objects, and it unit-tests the alerts with `promtool test rules`. No operator runs in CI.
+
 The dashboard is qui's official one. The Grafana Operator downloads it from the qui repository, at the qui version the
 chart deploys, and fills in your datasource. The chart does not contain it.
 
