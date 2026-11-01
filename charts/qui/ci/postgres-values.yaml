@@ -25,7 +25,7 @@ controllers:
       db:
         image:
           repository: docker.io/library/postgres
-          tag: 17-alpine
+          tag: 18-alpine
         env:
           POSTGRES_USER: qui
           POSTGRES_PASSWORD: ci-only-password
