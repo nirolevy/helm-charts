@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: hack/annotate.sh <title> <file>
 # Writes the end of <file> as GitHub Actions error annotations. GitHub keeps 4 KB per
-# annotation and 10 error annotations per step, so the last ~28 KB go out in 7 chunks.
+# annotation and 10 error annotations per step, so the last 28 KB go out in at most 8 chunks.
 set -euo pipefail
 title=$1
 file=$2
