@@ -125,10 +125,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - k8s: "1.31"
-            image: kindest/node:v1.31.14@sha256:6f86cf509dbb42767b6e79debc3f2c32e4ee01386f0489b3b2be24b0a55aac2b
+          # Kubernetes releases that still get updates, oldest first. The Grafana Operator CRDs need
+          # a newer API server than 1.31.
           - k8s: "1.34"
             image: kindest/node:v1.34.11@sha256:44e222ee2132dab25ff87301682f89eb82c7880ea3a1bf543bfe9708fd08d67d
+          - k8s: "1.36"
+            image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
           - k8s: "1.37"
             image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
     steps:
@@ -151,6 +153,7 @@ jobs:
       # The monitoring objects need their CRDs. No operator runs: the API server only validates them.
       - name: Install monitoring CRDs
         run: |
+          exec > >(tee crd.log) 2>&1
           prometheus="https://github.com/prometheus-operator/prometheus-operator/releases/download/$PROMETHEUS_OPERATOR_VERSION"
           grafana="https://github.com/grafana/grafana-operator/releases/download/$GRAFANA_OPERATOR_VERSION"
           kubectl apply --server-side -f "$prometheus/stripped-down-crds.yaml"
@@ -177,7 +180,8 @@ jobs:
           K8S: ${{ matrix.k8s }}
         run: |
           {
-            grep -vE '^\s*$' ct.log | tail -n 60
+            [ -f crd.log ] && tail -n 30 crd.log
+            [ -f ct.log ] && grep -vE '^\s*$' ct.log | tail -n 60
             echo '--- pods'
             kubectl get pods --all-namespaces -o wide
             echo '--- warning events'
