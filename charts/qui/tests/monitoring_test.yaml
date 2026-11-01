@@ -105,3 +105,13 @@ tests:
       controllers.qui.containers.app.image.tag: latest
     asserts:
       - matchRegex: {path: spec.url, pattern: "/autobrr/qui/v9.9.9/"}
+
+  - it: QuiDown also fires when there is no target, with the chart's ServiceMonitor
+    documentSelector: {path: kind, value: PrometheusRule}
+    set:
+      qui.monitoring.serviceMonitor.enabled: true
+      qui.monitoring.prometheusRule.enabled: true
+    asserts:
+      - equal:
+          path: "spec.groups[0].rules[0].expr"
+          value: 'up{namespace="media", service="qui"} == 0 or absent(up{namespace="media", service="qui"})'

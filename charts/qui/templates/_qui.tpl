@@ -250,12 +250,17 @@ Grafana Operator GrafanaDashboard as library rawResources (mutates .Values).
 {{- if .enabled }}
 {{- $service := include "bjw-s.common.lib.service.getByIdentifier" (dict "rootContext" $ "id" "app") | fromYaml }}
 {{- $selector := printf "namespace=%q, service=%q" $.Release.Namespace $service.name }}
+{{- /* With the chart's ServiceMonitor, a missing target (no pod at all) is also down. */ -}}
+{{- $downExpr := printf "up{%s} == 0" $selector }}
+{{- if $m.serviceMonitor.enabled }}
+{{- $downExpr = printf "%s or absent(up{%s})" $downExpr $selector }}
+{{- end }}
 {{- $alerts := list
   (dict "alert" "QuiDown"
-    "expr" (printf "up{%s} == 0" $selector)
+    "expr" $downExpr
     "for" "5m"
     "labels" (dict "severity" "critical")
-    "annotations" (dict "summary" "qui is down" "description" "Prometheus cannot scrape the qui metrics endpoint. qui cannot report this itself."))
+    "annotations" (dict "summary" "qui is down" "description" "Prometheus cannot scrape the qui metrics endpoint, or (with the chart's ServiceMonitor) finds no qui target at all."))
   (dict "alert" "QuiQbittorrentInstanceDown"
     "expr" (printf "qbittorrent_instance_connection_status{%s} == 0" $selector)
     "for" "10m"
