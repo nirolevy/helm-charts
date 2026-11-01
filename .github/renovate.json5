@@ -8,6 +8,9 @@
   // No schedule: updates open as soon as Renovate sees them and merge when CI passes.
   // The repository allows rebase merges only.
   automergeStrategy: 'rebase',
+  // Rebuild a PR whenever main moves, so its chart version bump is computed from the current
+  // main. Without this, two PRs bump to the same version and both merge.
+  rebaseWhen: 'behind-base-branch',
   dependencyDashboard: true,
   // There are no lock files (Chart.lock is not committed).
   lockFileMaintenance: {

@@ -57,6 +57,21 @@ jobs:
             fi
           done
 
+      # A version must name one package. If a chart changed after its version was tagged (two pull
+      # requests merged with the same bump), stop instead of skipping or overwriting the release.
+      - name: Check that changed charts have new versions
+        run: |
+          status=0
+          for dir in charts/*/; do
+            dir=${dir%/}
+            tag="$(yq '.name' "$dir/Chart.yaml")-$(yq '.version' "$dir/Chart.yaml")"
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null && ! git diff --quiet "$tag" HEAD -- "$dir"; then
+              echo "::error file=$dir/Chart.yaml::$dir changed since $tag was released. Bump its version in a new pull request."
+              status=1
+            fi
+          done
+          exit "$status"
+
       - name: Run chart-releaser
         id: cr
         uses: helm/chart-releaser-action@92c6b97fa9f664492a2592e0d1d80bc6bf378957 # v1.9.0
@@ -79,6 +94,12 @@ jobs:
           echo "$GITHUB_TOKEN" | cosign login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           for package in .cr-release-packages/*.tgz; do
             name=$(helm show chart "$package" | yq '.name')
+            version=$(helm show chart "$package" | yq '.version')
+            # Never replace a published version.
+            if helm show chart "oci://$registry/$name" --version "$version" >/dev/null 2>&1; then
+              echo "::error::$registry/$name:$version already exists; not overwriting it"
+              exit 1
+            fi
             helm push "$package" "oci://$registry" 2>&1 | tee push.log
             digest=$(grep -oE 'sha256:[a-f0-9]{64}' push.log | tail -1)
             if [ -z "$digest" ]; then
