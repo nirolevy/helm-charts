@@ -1,0 +1,19 @@
+{{- include "bjw-s.common.loader.init" . }}
+{{- $service := include "bjw-s.common.lib.service.getByIdentifier" (dict "rootContext" $ "id" "app") | fromYaml }}
+{{- $port := dig "service" "app" "ports" "http" "port" 7476 .Values }}
+{{- $base := trimAll "/" (toString (default "" .Values.qui.config.baseUrl)) }}
+qui is starting. Open the web UI:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ $service.name }} {{ $port }}
+
+Then open http://localhost:{{ $port }}/{{ with $base }}{{ . }}/{{ end }}. On a new install, create the admin account.
+{{- if not (dig "persistence" "config" "enabled" true .Values) }}
+
+WARNING: persistence.config is disabled. config.toml, the session secret and the SQLite database
+are lost when the pod restarts, unless another volume is mounted at /config.
+{{- end }}
+{{- if and (not .Values.qui.secret.values.sessionSecret) (not .Values.qui.secret.existingSecret) }}
+
+No session secret is set, so qui keeps the one it generates on first start in /config/config.toml.
+Stored qBittorrent passwords depend on it: back it up, or manage it with qui.secret (see the chart README).
+{{- end }}

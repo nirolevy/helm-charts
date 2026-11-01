@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/helm-unittest/helm-unittest/main/schema/helm-testsuite.json
+suite: monitoring
+templates:
+  - common.yaml
+release:
+  name: qui
+  namespace: media
+chart:
+  appVersion: v9.9.9
+tests:
+  - it: renders no monitoring objects by default
+    asserts:
+      - containsDocument: {kind: ServiceMonitor, apiVersion: monitoring.coreos.com/v1}
+        not: true
+      - containsDocument: {kind: PrometheusRule, apiVersion: monitoring.coreos.com/v1}
+        not: true
+      - containsDocument: {kind: GrafanaDashboard, apiVersion: grafana.integreatly.org/v1beta1}
+        not: true
+
+  - it: a ServiceMonitor turns on the metrics server and scrapes the qui Service
+    set:
+      qui.monitoring.serviceMonitor:
+        enabled: true
+        labels: {release: kube-prometheus-stack}
+        endpoint:
+          basicAuth:
+            username: {name: qui-metrics, key: username}
+            password: {name: qui-metrics, key: password}
+    asserts:
+      - equal: {path: metadata.labels.release, value: kube-prometheus-stack}
+        documentSelector: {path: kind, value: ServiceMonitor}
+      - equal: {path: "spec.selector.matchLabels[\"app.kubernetes.io/service\"]", value: qui}
+        documentSelector: {path: kind, value: ServiceMonitor}
+      - equal:
+          path: spec.endpoints[0]
+          value:
+            port: metrics
+            path: /metrics
+            scheme: http
+            interval: 30s
+            scrapeTimeout: 10s
+            basicAuth:
+              username: {name: qui-metrics, key: username}
+              password: {name: qui-metrics, key: password}
+        documentSelector: {path: kind, value: ServiceMonitor}
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__METRICS_ENABLED, value: "true"}}
+        documentSelector: {path: kind, value: Deployment}
+      - contains:
+          path: spec.ports
+          content: {name: metrics, port: 9074, targetPort: 9074, protocol: TCP}
+        documentSelector: {path: kind, value: Service}
+
+  - it: renders the alerts, scoped to this release's Service
+    documentSelector: {path: kind, value: PrometheusRule}
+    set:
+      qui.monitoring.prometheusRule:
+        enabled: true
+        alertLabels: {team: media}
+    asserts:
+      - equal: {path: metadata.name, value: qui-rules}
+      - equal: {path: "spec.groups[0].rules[0].alert", value: QuiDown}
+      - equal: {path: "spec.groups[0].rules[0].expr", value: 'up{namespace="media", service="qui"} == 0'}
+      - equal: {path: "spec.groups[0].rules[0].labels", value: {severity: critical, team: media}}
+      - lengthEqual: {path: "spec.groups[0].rules", count: 4}
+
+  - it: leaves out disabled alerts and adds custom rules with Prometheus templates
+    documentSelector: {path: kind, value: PrometheusRule}
+    set:
+      qui.monitoring.prometheusRule:
+        enabled: true
+        disabledAlerts: [QuiQbittorrentInstanceDown, QuiDatabaseWedgedTransactions]
+        additionalRules:
+          - alert: QuiTorrentErrors
+            expr: qbittorrent_torrents_error > 0
+            annotations:
+              description: '{{ "{{" }} $labels.instance_name {{ "}}" }} has torrents in error'
+    asserts:
+      - lengthEqual: {path: "spec.groups[0].rules", count: 3}
+      - equal: {path: "spec.groups[0].rules[2].annotations.description", value: "{{ $labels.instance_name }} has torrents in error"}
+
+  - it: points the Grafana dashboard at the deployed qui version
+    documentSelector: {path: kind, value: GrafanaDashboard}
+    set:
+      qui.monitoring.grafanaDashboard: {enabled: true, folder: Media}
+    asserts:
+      - equal: {path: metadata.name, value: qui-dashboard}
+      - equal:
+          path: spec.url
+          value: https://raw.githubusercontent.com/autobrr/qui/v9.9.9/documentation/static/examples/qui-grafana-dashboard.json
+      - equal: {path: spec.datasources, value: [{inputName: DS_PROMETHEUS, datasourceName: Prometheus}]}
+      - equal: {path: spec.folder, value: Media}
+
+  - it: follows a pinned image tag for the dashboard URL
+    documentSelector: {path: kind, value: GrafanaDashboard}
+    set:
+      qui.monitoring.grafanaDashboard.enabled: true
+      controllers.qui.containers.app.image.tag: v1.2.3
+    asserts:
+      - matchRegex: {path: spec.url, pattern: "/autobrr/qui/v1.2.3/"}
+
+  - it: falls back to appVersion for a non-release tag
+    documentSelector: {path: kind, value: GrafanaDashboard}
+    set:
+      qui.monitoring.grafanaDashboard.enabled: true
+      controllers.qui.containers.app.image.tag: latest
+    asserts:
+      - matchRegex: {path: spec.url, pattern: "/autobrr/qui/v9.9.9/"}

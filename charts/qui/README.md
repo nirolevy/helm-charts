@@ -28,7 +28,8 @@ Then open the UI and create the admin account:
 kubectl --namespace qui port-forward svc/qui 7476
 ```
 
-Requirements: Kubernetes `>=1.31.0-0`, Helm 3.8 or later.
+Requirements: Kubernetes `>=1.31.0-0` and Helm 4. Helm 3.22 also works, but Helm 3 is end-of-life,
+and Helm 3.18 fails inside the common library. CI tests with Helm 4 only.
 
 ## How the chart works
 
@@ -49,7 +50,7 @@ On top of the library, the chart adds `qui`:
 The chart also sets the listen port from `service.app.ports.http`, enables the metrics server when
 `service.app.ports.metrics` is enabled, and sends probes with `Host: localhost` so `allowedHosts` cannot block them.
 
-Settings set through variables are locked in the qui UI.
+When a variable sets a log setting, qui locks that field in its UI.
 
 For anything else, use the library directly: `controllers.qui.containers.app.env`, `envFrom`, `args`, `command`,
 extra `persistence` entries, sidecars under `controllers.qui.containers`, init containers, or `rawResources`.
@@ -160,25 +161,64 @@ defaultPodOptions:
 
 Then enable **Local Filesystem Access** for the instance in the qui UI.
 
-### Prometheus metrics
+### Monitoring
+
+qui exports Prometheus metrics for itself and every qBittorrent instance
+([metric reference](https://getqui.com/docs/advanced/metrics)). Turn on the parts you have the CRDs for;
+each one also turns on the qui metrics server:
 
 ```yaml
-service:
-  app:
-    ports:
-      metrics:
-        enabled: true
-serviceMonitor:
-  app:
-    labels:
-      release: kube-prometheus-stack
-    service:
-      identifier: app
-    endpoints:
-      - port: metrics
-        path: /metrics
-        interval: 30s
+qui:
+  monitoring:
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack # the label your Prometheus selects
+    prometheusRule:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack
+    grafanaDashboard: # needs the Grafana Operator
+      enabled: true
+      datasourceName: Prometheus
+      instanceSelector:
+        matchLabels:
+          dashboards: grafana
 ```
+
+The PrometheusRule has these alerts: `QuiDown` (Prometheus cannot scrape qui), `QuiQbittorrentInstanceDown`,
+`QuiCollectionErrors` and `QuiDatabaseWedgedTransactions`. Leave some out with `disabledAlerts`, label them with
+`alertLabels`, and add your own with `additionalRules`. A disabled qBittorrent instance also counts as down.
+
+The dashboard is qui's official one. The Grafana Operator downloads it from the qui repository, at the qui version the
+chart deploys, and fills in your datasource. The chart does not contain it.
+
+Without the Grafana Operator, let the [Grafana Helm chart](https://github.com/grafana-community/helm-charts/tree/main/charts/grafana)
+(also used by kube-prometheus-stack) download it. Use the qui version you deploy in the URL and your Prometheus
+datasource UID as the value:
+
+```yaml
+# Grafana chart values (under `grafana:` in kube-prometheus-stack)
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: qui
+        folder: qui
+        type: file
+        options:
+          path: /var/lib/grafana/dashboards/qui
+dashboards:
+  qui:
+    qui:
+      url: https://raw.githubusercontent.com/autobrr/qui/<qui version>/documentation/static/examples/qui-grafana-dashboard.json
+      datasource:
+        - name: DS_PROMETHEUS
+          value: <Prometheus datasource UID>
+```
+
+If you set `metricsBasicAuthUsers` in `qui.secret`, add the credentials to the scrape with
+`qui.monitoring.serviceMonitor.endpoint.basicAuth`.
 
 ### Settings without a variable
 
@@ -336,7 +376,7 @@ The config PersistentVolumeClaim is kept (`persistence.config.retain`). Delete i
 | qui.config.databaseUser | string | `nil` | Postgres user, when not using a DSN. |
 | qui.config.disableSelfUpdate | bool | `nil` | Hide Self-update in the UI. qui already disables it in Kubernetes. |
 | qui.config.externalProgramMaxRunning | int | `nil` | Maximum number of external programs that run at the same time. |
-| qui.config.host | string | `"0.0.0.0"` | Listen address. |
+| qui.config.host | string | `"0.0.0.0"` | Listen address. Use `"::"` on IPv6-only clusters. |
 | qui.config.iAcknowledgeThisIsABadIdea | bool | `nil` | Confirmation required to disable authentication. |
 | qui.config.logLevel | string | `nil` | Log level: `ERROR`, `WARN`, `INFO`, `DEBUG` or `TRACE`. qui defaults to `DEBUG`. |
 | qui.config.logMaxBackups | int | `nil` | Rotated log files to keep, 0 keeps all (with `logPath`). |
@@ -356,6 +396,24 @@ The config PersistentVolumeClaim is kept (`persistence.config.retain`). Delete i
 | qui.configFile.enabled | bool | `false` | Write `config.toml` before qui starts, for settings without a variable (for example `externalProgramAllowList`). Variables from `qui.config` and `qui.secret` still win. |
 | qui.configFile.overwrite | bool | `true` | `true` replaces `config.toml` on every start. `false` writes it only if none exists. |
 | qui.extraArgs | list | `[]` | Arguments appended to `controllers.qui.containers.app.args`, for example `["--pprof"]`. For extra environment variables use `controllers.qui.containers.app.env` (map or list) and `envFrom`. |
+| qui.monitoring.grafanaDashboard.allowCrossNamespaceImport | bool | `false` | Allow Grafana instances in other namespaces to import it. |
+| qui.monitoring.grafanaDashboard.datasourceName | string | `"Prometheus"` | Name of the Grafana datasource that scrapes qui. It replaces the dashboard's `DS_PROMETHEUS` input. |
+| qui.monitoring.grafanaDashboard.enabled | bool | `false` | Create a Grafana Operator `GrafanaDashboard` with qui's official dashboard. The operator downloads it from `url`; the chart does not contain the dashboard. |
+| qui.monitoring.grafanaDashboard.folder | string | `nil` | Grafana folder title. |
+| qui.monitoring.grafanaDashboard.instanceSelector | object | `{"matchLabels":{"dashboards":"grafana"}}` | Selects the Grafana instances that get the dashboard (required by the operator). |
+| qui.monitoring.grafanaDashboard.labels | object | `{}` | GrafanaDashboard labels. |
+| qui.monitoring.grafanaDashboard.resyncPeriod | string | `"1h"` | How often the operator re-checks the dashboard. |
+| qui.monitoring.grafanaDashboard.url | string | `nil` | Dashboard URL. Defaults to the dashboard of the qui version the chart deploys. |
+| qui.monitoring.prometheusRule.additionalRules | list | `[]` | Extra Prometheus rules added to the group. Strings are Helm-templated, so write Prometheus templates as `{{ "{{" }} $labels.instance_name {{ "}}" }}`. |
+| qui.monitoring.prometheusRule.alertLabels | object | `{}` | Labels added to every alert, for example `severity` overrides or a team label. |
+| qui.monitoring.prometheusRule.disabledAlerts | list | `[]` | Names of built-in alerts to leave out: `QuiDown`, `QuiQbittorrentInstanceDown`, `QuiCollectionErrors`, `QuiDatabaseWedgedTransactions`. |
+| qui.monitoring.prometheusRule.enabled | bool | `false` | Create a PrometheusRule with alerts for qui and its qBittorrent instances. |
+| qui.monitoring.prometheusRule.labels | object | `{}` | PrometheusRule labels, for example the label your Prometheus selects. |
+| qui.monitoring.serviceMonitor.enabled | bool | `false` | Create a ServiceMonitor for the qui metrics endpoint. |
+| qui.monitoring.serviceMonitor.endpoint | object | `{}` | Fields merged into the scrape endpoint, for example `basicAuth` when `metricsBasicAuthUsers` is set. |
+| qui.monitoring.serviceMonitor.interval | string | `"30s"` | Scrape interval. |
+| qui.monitoring.serviceMonitor.labels | object | `{}` | ServiceMonitor labels, for example the label your Prometheus selects (`release: kube-prometheus-stack`). |
+| qui.monitoring.serviceMonitor.scrapeTimeout | string | `"10s"` | Scrape timeout. |
 | qui.secret.existingSecret | string | `""` | Existing Secret loaded with `envFrom`. Its keys must be variable names, for example `QUI__SESSION_SECRET`. |
 | qui.secret.values | object | `{}` | Credentials by `config.toml` name (`sessionSecret`, `databasePassword`, `databaseDsn`, `oidcClientSecret`, `metricsBasicAuthUsers`, ...). Stored in a Secret the chart creates. Prefer `existingSecret`, so credentials stay out of values files. |
 | route | object | `{}` |  |

@@ -45,6 +45,14 @@ The port qui listens on: the target port (or port) of service.app.ports.<name>.
 {{- end }}
 
 {{/*
+Name of an object the chart adds: <fullname>-<suffix>. Fixed, because the library otherwise
+names an object by how many of its kind exist, and a renamed Secret breaks references to it.
+*/}}
+{{- define "qui.resourceName" -}}
+{{- printf "%s-%s" (include "bjw-s.common.lib.chart.names.fullname" .root | trunc (int (sub 62 (len .suffix)))) .suffix | trimSuffix "-" }}
+{{- end }}
+
+{{/*
 Fail early on values that would deploy a broken qui.
 */}}
 {{- define "qui.validate" -}}
@@ -55,6 +63,16 @@ Fail early on values that would deploy a broken qui.
 {{- end }}
 {{- if not (dig "service" "app" "ports" "http" false .Values) }}
 {{- fail "service.app.ports.http is required: qui listens on its port" }}
+{{- end }}
+{{- range $name := list "http" "metrics" }}
+{{- with dig "service" "app" "ports" $name "targetPort" nil $.Values }}
+{{- if not (regexMatch "^[0-9]+$" (toString .)) }}
+{{- fail (printf "service.app.ports.%s.targetPort must be a number: qui listens on it" $name) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if gt (int (dig "replicas" 1 $controller)) 1 }}
+{{- fail "controllers.qui.replicas must be 0 or 1: a second qui runs the same background jobs and, with SQLite, shares one database file" }}
 {{- end }}
 {{- $config := $qui.config }}
 {{- if and (include "qui.isSet" $config.port) (ne (int64 $config.port) (int64 (include "qui.servicePort" (dict "root" . "name" "http")))) }}
@@ -86,6 +104,17 @@ Translate `qui.*` into common library values (mutates .Values).
 {{- $root := . }}
 {{- $qui := .Values.qui }}
 {{- $container := .Values.controllers.qui.containers.app }}
+
+{{- /* Monitoring needs the metrics server and its Service port. */ -}}
+{{- $monitoring := $qui.monitoring }}
+{{- if or $monitoring.serviceMonitor.enabled $monitoring.prometheusRule.enabled $monitoring.grafanaDashboard.enabled }}
+{{- $metricsPort := dig "service" "app" "ports" "metrics" dict .Values }}
+{{- if not $metricsPort }}
+{{- fail "qui.monitoring needs service.app.ports.metrics: qui serves metrics on that port" }}
+{{- end }}
+{{- $_ := set $metricsPort "enabled" true }}
+{{- end }}
+{{- include "qui.monitoring" . }}
 
 {{- /* Settings the chart derives from the Service. */ -}}
 {{- $config := deepCopy $qui.config }}
@@ -137,8 +166,7 @@ Translate `qui.*` into common library values (mutates .Values).
 {{- $_ := set $data (include "qui.envName" $key) (include "qui.envValue" $value) }}
 {{- end }}
 {{- $secrets := default dict .Values.secrets }}
-{{- /* A fixed suffix: without one the library names it <fullname>, which other resources may also use. */ -}}
-{{- $_ := set $secrets "qui-env" (dict "enabled" true "suffix" "env" "stringData" $data) }}
+{{- $_ := set $secrets "qui-env" (dict "enabled" true "forceRename" (include "qui.resourceName" (dict "root" $ "suffix" "env")) "stringData" $data) }}
 {{- $_ := set .Values "secrets" $secrets }}
 {{- $envFrom = append $envFrom (dict "secretRef" (dict "identifier" "qui-env")) }}
 {{- end }}
@@ -152,7 +180,7 @@ Translate `qui.*` into common library values (mutates .Values).
 {{- /* config.toml: a ConfigMap copied into /config by an init container. */ -}}
 {{- if $qui.configFile.enabled }}
 {{- $configMaps := default dict .Values.configMaps }}
-{{- $_ := set $configMaps "qui-config-file" (dict "enabled" true "suffix" "config-file" "data" (dict "config.toml" $qui.configFile.content)) }}
+{{- $_ := set $configMaps "qui-config-file" (dict "enabled" true "forceRename" (include "qui.resourceName" (dict "root" $ "suffix" "config-file")) "data" (dict "config.toml" $qui.configFile.content)) }}
 {{- $_ := set .Values "configMaps" $configMaps }}
 {{- $persistence := default dict .Values.persistence }}
 {{- $mount := list (dict "path" "/chart-config" "readOnly" true) }}
@@ -198,4 +226,98 @@ echo "Creating $target from the chart"
 umask 077
 cp /chart-config/config.toml "$target.tmp"
 mv "$target.tmp" "$target"
+{{- end }}
+
+{{/*
+Monitoring objects from `qui.monitoring`: a library ServiceMonitor, and a PrometheusRule and a
+Grafana Operator GrafanaDashboard as library rawResources (mutates .Values).
+*/}}
+{{- define "qui.monitoring" -}}
+{{- $m := .Values.qui.monitoring }}
+
+{{- with $m.serviceMonitor }}
+{{- if .enabled }}
+{{- $endpoint := merge (deepCopy .endpoint) (dict "port" "metrics" "path" "/metrics" "scheme" "http" "interval" .interval "scrapeTimeout" .scrapeTimeout) }}
+{{- $monitors := default dict $.Values.serviceMonitor }}
+{{- $_ := set $monitors "qui" (dict "enabled" true "labels" .labels "service" (dict "identifier" "app") "endpoints" (list $endpoint)) }}
+{{- $_ := set $.Values "serviceMonitor" $monitors }}
+{{- end }}
+{{- end }}
+
+{{- $raw := default dict .Values.rawResources }}
+
+{{- with $m.prometheusRule }}
+{{- if .enabled }}
+{{- $service := include "bjw-s.common.lib.service.getByIdentifier" (dict "rootContext" $ "id" "app") | fromYaml }}
+{{- $selector := printf "namespace=%q, service=%q" $.Release.Namespace $service.name }}
+{{- $alerts := list
+  (dict "alert" "QuiDown"
+    "expr" (printf "up{%s} == 0" $selector)
+    "for" "5m"
+    "labels" (dict "severity" "critical")
+    "annotations" (dict "summary" "qui is down" "description" "Prometheus cannot scrape the qui metrics endpoint. qui cannot report this itself."))
+  (dict "alert" "QuiQbittorrentInstanceDown"
+    "expr" (printf "qbittorrent_instance_connection_status{%s} == 0" $selector)
+    "for" "10m"
+    "labels" (dict "severity" "warning")
+    "annotations" (dict "summary" "A qBittorrent instance is disconnected" "description" "qui reports the instance in the instance_name label as unhealthy or disabled. Disabled instances also report 0; disable this alert or add an alert label matcher if you keep instances disabled."))
+  (dict "alert" "QuiCollectionErrors"
+    "expr" (printf "sum by (namespace, service, instance_name, type) (sum_over_time(qbittorrent_scrape_errors_total{%s}[5m])) > 0" $selector)
+    "for" "15m"
+    "labels" (dict "severity" "warning")
+    "annotations" (dict "summary" "qui cannot collect qBittorrent metrics" "description" "qui failed to collect metrics from the instance in the instance_name label for 15 minutes."))
+  (dict "alert" "QuiDatabaseWedgedTransactions"
+    "expr" (printf "increase(qui_db_wedged_transaction_total{%s}[1h]) > 0" $selector)
+    "labels" (dict "severity" "warning")
+    "annotations" (dict "summary" "qui detected wedged SQLite transactions" "description" "qui detected nested SQLite transactions in the last hour. Check the qui logs."))
+}}
+{{- $rules := list }}
+{{- range $alerts }}
+{{- if not (has .alert $m.prometheusRule.disabledAlerts) }}
+{{- $_ := set . "labels" (merge (deepCopy $m.prometheusRule.alertLabels) .labels) }}
+{{- $rules = append $rules . }}
+{{- end }}
+{{- end }}
+{{- $rules = concat $rules (default list .additionalRules) }}
+{{- $manifest := dict
+  "apiVersion" "monitoring.coreos.com/v1"
+  "kind" "PrometheusRule"
+  "metadata" (dict "labels" .labels)
+  "spec" (dict "groups" (list (dict "name" "qui" "rules" $rules)))
+}}
+{{- $_ := set $raw "qui-prometheus-rule" (dict "enabled" true "forceRename" (include "qui.resourceName" (dict "root" $ "suffix" "rules")) "manifest" $manifest) }}
+{{- end }}
+{{- end }}
+
+{{- with $m.grafanaDashboard }}
+{{- if .enabled }}
+{{- /* The dashboard of the deployed qui release; a non-release tag (latest, develop) falls back to appVersion. */ -}}
+{{- $tag := toString (dig "controllers" "qui" "containers" "app" "image" "tag" "" $.Values) }}
+{{- if not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+$" $tag) }}
+{{- $tag = $.Chart.AppVersion }}
+{{- end }}
+{{- $url := default (printf "https://raw.githubusercontent.com/autobrr/qui/%s/documentation/static/examples/qui-grafana-dashboard.json" $tag) .url }}
+{{- $spec := dict
+  "url" $url
+  "instanceSelector" .instanceSelector
+  "resyncPeriod" .resyncPeriod
+  "allowCrossNamespaceImport" .allowCrossNamespaceImport
+  "datasources" (list (dict "inputName" "DS_PROMETHEUS" "datasourceName" .datasourceName))
+}}
+{{- with .folder }}
+{{- $_ := set $spec "folder" . }}
+{{- end }}
+{{- $manifest := dict
+  "apiVersion" "grafana.integreatly.org/v1beta1"
+  "kind" "GrafanaDashboard"
+  "metadata" (dict "labels" .labels)
+  "spec" $spec
+}}
+{{- $_ := set $raw "qui-grafana-dashboard" (dict "enabled" true "forceRename" (include "qui.resourceName" (dict "root" $ "suffix" "dashboard")) "manifest" $manifest) }}
+{{- end }}
+{{- end }}
+
+{{- if $raw }}
+{{- $_ := set .Values "rawResources" $raw }}
+{{- end }}
 {{- end }}
