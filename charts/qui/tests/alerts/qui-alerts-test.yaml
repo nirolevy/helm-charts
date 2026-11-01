@@ -1,0 +1,99 @@
+# promtool unit tests for the chart's alerts: hack/test-alerts.sh renders the PrometheusRule with
+# charts/qui/ci/monitoring-values.yaml (release "ci", namespace "ci") and runs `promtool test rules`.
+rule_files:
+  - rules.yaml
+evaluation_interval: 1m
+tests:
+  - name: QuiDown fires when the target is down and when it is missing
+    interval: 1m
+    input_series:
+      - series: 'up{namespace="ci", service="ci-qui", job="ci-qui"}'
+        values: '1x4 0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: QuiDown
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: QuiDown
+        exp_alerts:
+          - exp_labels: {severity: critical, team: media, namespace: ci, service: ci-qui, job: ci-qui}
+            exp_annotations:
+              summary: qui is down
+              description: Prometheus cannot scrape the qui metrics endpoint, or (with the chart's ServiceMonitor) finds no qui target at all.
+
+  - name: QuiDown fires when qui has no target at all
+    interval: 1m
+    input_series:
+      - series: 'up{namespace="other", service="something-else"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: QuiDown
+        exp_alerts:
+          - exp_labels: {severity: critical, team: media, namespace: ci, service: ci-qui}
+            exp_annotations:
+              summary: qui is down
+              description: Prometheus cannot scrape the qui metrics endpoint, or (with the chart's ServiceMonitor) finds no qui target at all.
+
+  - name: A disconnected qBittorrent instance alerts after 10 minutes, a healthy one never
+    interval: 1m
+    input_series:
+      - series: 'qbittorrent_instance_connection_status{namespace="ci", service="ci-qui", instance_name="seedbox"}'
+        values: '0x15'
+      - series: 'qbittorrent_instance_connection_status{namespace="ci", service="ci-qui", instance_name="home"}'
+        values: '1x15'
+      - series: 'up{namespace="ci", service="ci-qui"}'
+        values: '1x15'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: QuiQbittorrentInstanceDown
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: QuiQbittorrentInstanceDown
+        exp_alerts:
+          - exp_labels: {severity: warning, team: media, namespace: ci, service: ci-qui, instance_name: seedbox}
+            exp_annotations:
+              summary: A qBittorrent instance is disconnected
+              description: >-
+                qui reports the instance in the instance_name label as unhealthy or disabled.
+                Disabled instances also report 0; disable this alert or add an alert label matcher
+                if you keep instances disabled.
+
+  - name: Collection errors alert after 15 minutes of failures
+    interval: 1m
+    input_series:
+      # qui emits a sample only for a failed collection, with value 1.
+      - series: 'qbittorrent_scrape_errors_total{namespace="ci", service="ci-qui", instance_name="seedbox", type="torrents"}'
+        values: '1x25'
+      - series: 'up{namespace="ci", service="ci-qui"}'
+        values: '1x25'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: QuiCollectionErrors
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: QuiCollectionErrors
+        exp_alerts:
+          - exp_labels: {severity: warning, team: media, namespace: ci, service: ci-qui, instance_name: seedbox, type: torrents}
+            exp_annotations:
+              summary: qui cannot collect qBittorrent metrics
+              description: qui failed to collect metrics from the instance in the instance_name label for 15 minutes.
+
+  - name: Wedged transactions alert as soon as the counter grows
+    interval: 1m
+    input_series:
+      - series: 'qui_db_wedged_transaction_total{namespace="ci", service="ci-qui"}'
+        values: '0 0 0 1 1 1'
+      - series: 'up{namespace="ci", service="ci-qui"}'
+        values: '1x5'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: QuiDatabaseWedgedTransactions
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: QuiDatabaseWedgedTransactions
+        exp_alerts:
+          - exp_labels: {severity: warning, team: media, namespace: ci, service: ci-qui}
+            exp_annotations:
+              summary: qui detected wedged SQLite transactions
+              description: qui detected nested SQLite transactions in the last hour. Check the qui logs.

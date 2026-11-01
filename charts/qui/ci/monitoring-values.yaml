@@ -1,0 +1,23 @@
+# Render every monitoring object. CI installs the Prometheus Operator and Grafana Operator CRDs, so
+# the API server validates them; no operator runs, so nothing scrapes or loads the dashboard.
+qui:
+  monitoring:
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack
+    prometheusRule:
+      enabled: true
+      alertLabels:
+        team: media
+      additionalRules:
+        - alert: QuiTorrentErrors
+          expr: sum by (instance_name) (qbittorrent_torrents_error) > 0
+          for: 30m
+          labels:
+            severity: info
+          annotations:
+            description: '{{ "{{" }} $labels.instance_name {{ "}}" }} has torrents in error'
+    grafanaDashboard:
+      enabled: true
+      folder: qui

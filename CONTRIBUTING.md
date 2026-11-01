@@ -19,6 +19,7 @@ ct lint --config ct.yaml --lint-conf .yamllint.yaml
 helm dependency build charts/<chart> && helm unittest --strict charts/<chart>
 ct install --config ct.yaml                   # on a kind cluster
 python3 hack/check-qui-config.py              # qui only: list qui settings missing from values.yaml
+hack/test-alerts.sh                           # qui only: promtool check and unit tests for the alerts
 ```
 
 ## Rules

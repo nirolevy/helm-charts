@@ -20,6 +20,12 @@ env:
   HELM_UNITTEST_VERSION: v1.2.1
   # renovate: datasource=pypi depName=pre-commit
   PRE_COMMIT_VERSION: 4.7.0
+  # renovate: datasource=github-releases depName=prometheus/prometheus
+  PROMETHEUS_VERSION: v3.15.1
+  # renovate: datasource=github-releases depName=prometheus-operator/prometheus-operator
+  PROMETHEUS_OPERATOR_VERSION: v0.94.2
+  # renovate: datasource=github-releases depName=grafana/grafana-operator
+  GRAFANA_OPERATOR_VERSION: v5.25.0
 
 jobs:
   pre-commit:
@@ -85,6 +91,18 @@ jobs:
             ct lint --config ct.yaml --lint-conf .yamllint.yaml --all --check-version-increment=false
           fi
 
+      - name: Alert tests (promtool)
+        if: contains(steps.changed.outputs.charts, 'charts/qui')
+        run: |
+          pip install --disable-pip-version-check pyyaml==6.0.3
+          version=${PROMETHEUS_VERSION#v}
+          base="https://github.com/prometheus/prometheus/releases/download/$PROMETHEUS_VERSION"
+          curl -fsSLO "$base/prometheus-$version.linux-amd64.tar.gz"
+          curl -fsSL "$base/sha256sums.txt" | grep " prometheus-$version.linux-amd64.tar.gz\$" | sha256sum -c -
+          sudo tar -xzf "prometheus-$version.linux-amd64.tar.gz" -C /usr/local/bin --strip-components=1 "prometheus-$version.linux-amd64/promtool"
+          helm dependency build charts/qui
+          hack/test-alerts.sh
+
       - name: Unit tests
         if: steps.changed.outputs.charts != ''
         env:
@@ -129,6 +147,18 @@ jobs:
         with:
           node_image: ${{ matrix.image }}
           wait: 120s
+
+      # The monitoring objects need their CRDs. No operator runs: the API server only validates them.
+      - name: Install monitoring CRDs
+        run: |
+          prometheus="https://github.com/prometheus-operator/prometheus-operator/releases/download/$PROMETHEUS_OPERATOR_VERSION"
+          grafana="https://github.com/grafana/grafana-operator/releases/download/$GRAFANA_OPERATOR_VERSION"
+          kubectl apply --server-side -f "$prometheus/stripped-down-crds.yaml"
+          kubectl apply --server-side -f "$grafana/crds.yaml"
+          kubectl wait --for condition=Established --timeout=60s \
+            crd/servicemonitors.monitoring.coreos.com \
+            crd/prometheusrules.monitoring.coreos.com \
+            crd/grafanadashboards.grafana.integreatly.org
 
       # Installs each chart once per file in its ci/ folder and runs `helm test`.
       # On pull requests it also upgrades from the version on main.
