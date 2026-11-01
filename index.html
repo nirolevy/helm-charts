@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Helm charts</title>
+  <style>
+    :root { color-scheme: light dark; --fg: #1f2328; --bg: #ffffff; --muted: #59636e; --code: #f6f8fa; }
+    @media (prefers-color-scheme: dark) { :root { --fg: #e6edf3; --bg: #0d1117; --muted: #9198a1; --code: #161b22; } }
+    body { margin: 0 auto; max-width: 44rem; padding: 2rem 1rem; font: 16px/1.5 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+    pre { background: var(--code); padding: 1rem; overflow-x: auto; border-radius: 6px; }
+    p.muted { color: var(--muted); }
+    a { color: inherit; }
+  </style>
+</head>
+<body>
+  <h1>Helm charts</h1>
+  <p>This is a Helm repository. Add it with:</p>
+  <pre><code>helm repo add nirolevy https://nirolevy.github.io/helm-charts
+helm repo update
+helm search repo nirolevy</code></pre>
+  <p>The same charts are on GitHub Container Registry:</p>
+  <pre><code>helm install qui oci://ghcr.io/nirolevy/charts/qui</code></pre>
+  <p>Charts, documentation and source: <a href="https://github.com/nirolevy/helm-charts">github.com/nirolevy/helm-charts</a>.
+     The repository index is <a href="index.yaml">index.yaml</a>.</p>
+  <p class="muted">The release workflow updates this branch. Do not edit index.yaml by hand.</p>
+</body>
+</html>
