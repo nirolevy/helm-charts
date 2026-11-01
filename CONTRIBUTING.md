@@ -28,7 +28,9 @@ python3 hack/check-qui-config.py              # qui only: list qui settings miss
 2. Document every value with a `# --` comment. pre-commit regenerates the chart README with helm-docs.
 3. Add unit tests in `charts/<chart>/tests/` and an install case in `charts/<chart>/ci/` when it makes sense.
 4. Describe breaking changes under "Upgrading" in `README.md.gotmpl`.
-5. Use [Conventional Commits](https://www.conventionalcommits.org) for pull request titles, for example `feat(qui): add ...`.
+5. Pull requests are rebase-merged, so every commit lands on `main` as written. Give each commit a
+   [Conventional Commits](https://www.conventionalcommits.org) message, for example `feat(qui): add ...`,
+   and keep each commit working on its own.
 
 ## Adding a chart
 
