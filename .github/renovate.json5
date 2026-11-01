@@ -5,13 +5,22 @@
     ':semanticCommits',
   ],
   labels: ['dependencies'],
-  timezone: 'Etc/UTC',
   // No schedule: updates open as soon as Renovate sees them and merge when CI passes.
   // The repository allows rebase merges only.
   automergeStrategy: 'rebase',
   dependencyDashboard: true,
+  // There are no lock files (Chart.lock is not committed).
+  lockFileMaintenance: {
+    enabled: false,
+  },
   'pre-commit': {
     enabled: true,
+  },
+  // The default ignores every **/tests/** path, which hides the helm test pod image in templates/tests/.
+  ignorePaths: ['**/node_modules/**', '**/vendor/**'],
+  'helm-values': {
+    // Also the chart-testing values files, for example ci/postgres-values.yaml.
+    managerFilePatterns: ['/(^|/)ci/[^/]+-values\\.ya?ml$/'],
   },
   customManagers: [
     {
@@ -20,7 +29,8 @@
       managerFilePatterns: ['/(^|/)charts/[^/]+/Chart\\.yaml$/'],
       matchStrings: [
         '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\nappVersion: "?(?<currentValue>[^"\\s]+)"?',
-        'image: (?<depName>ghcr\\.io/autobrr/qui):(?<currentValue>\\S+)',
+        // The artifacthub.io/images annotation: the only `image:` lines in a Chart.yaml.
+        '\\n\\s+image: (?<depName>[^\\s:]+):(?<currentValue>[^\\s@]+)',
       ],
       datasourceTemplate: 'docker',
     },
@@ -64,16 +74,28 @@
   ],
   packageRules: [
     {
-      description: 'Every chart change needs a new chart version',
-      matchFileNames: ['charts/**'],
+      description: 'App and library updates: the chart version follows the size of the update',
+      matchFileNames: ['charts/*/Chart.yaml', 'charts/*/values.schema.json'],
       bumpVersions: [
         {
           name: 'chart version',
-          // The chart root, also for files in templates/ and ci/.
-          filePatterns: ["{{replace '/(templates|ci)(/.*)?$' '' packageFileDir}}/Chart.yaml"],
+          filePatterns: ['{{packageFileDir}}/Chart.yaml'],
           matchStrings: ['\\nversion:\\s(?<version>[^\\s]+)'],
           // Upstream major -> chart major, patch -> patch, anything else -> minor.
           bumpType: '{{#if isMajor}}major{{else}}{{#if isPatch}}patch{{else}}minor{{/if}}{{/if}}',
+        },
+      ],
+    },
+    {
+      description: 'Test-only images (ci/ values, the helm test pod): a patch chart version, whatever the update',
+      matchFileNames: ['charts/*/ci/**', 'charts/*/templates/**'],
+      bumpVersions: [
+        {
+          name: 'chart version',
+          // The chart root, from charts/<chart>/ci or charts/<chart>/templates/...
+          filePatterns: ["{{replace '/(templates|ci)(/.*)?$' '' packageFileDir}}/Chart.yaml"],
+          matchStrings: ['\\nversion:\\s(?<version>[^\\s]+)'],
+          bumpType: 'patch',
         },
       ],
     },
@@ -82,6 +104,13 @@
       matchPackageNames: ['ghcr.io/bjw-s-labs/helm/common'],
       groupName: 'bjw-s common library',
       pinDigests: false,
+    },
+    {
+      description: 'The image tag in values.yaml is {{ .Chart.AppVersion }}; appVersion in Chart.yaml carries the update',
+      matchManagers: ['helm-values'],
+      matchFileNames: ['charts/*/values.yaml'],
+      matchCurrentValue: '/\\{\\{/',
+      enabled: false,
     },
     {
       description: 'qui releases',
