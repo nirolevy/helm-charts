@@ -2,13 +2,14 @@
 """Report qui settings that values.yaml does not list in `qui.config`.
 
 Reads internal/config/config.go of the qui release in Chart.yaml `appVersion`
-and exits 1 when:
+and exits 3 when:
   * a qui setting is missing from `qui.config` in values.yaml (and is not a
     credential or a chart-managed setting), or
   * the chart renders a different variable name than the one qui reads.
 
 Unlisted settings still work through `qui.config` or the container env, so this
 is only a documentation reminder: the qui-settings workflow opens an issue.
+Any other non-zero exit is an error in the check itself.
 
 Usage: python3 hack/check-qui-config.py [path/to/config.go]
 """
@@ -29,6 +30,9 @@ SECRET_KEYS = {"sessionSecret", "databaseDsn", "databasePassword", "oidcClientSe
 CHART_MANAGED = {"port", "metricsEnabled", "metricsHost", "metricsPort"}
 # qui's viper key for this setting is not camelCase; the chart uses iAcknowledgeThisIsABadIdea.
 KEY_ALIASES = {"I_ACKNOWLEDGE_THIS_IS_A_BAD_IDEA": "iAcknowledgeThisIsABadIdea"}
+
+# Exit code for "settings are missing", distinct from 1, which Python uses for crashes.
+MISSING = 3
 
 BIND_RE = re.compile(r'(?:BindEnv|bindOrReadFromFile)\("([^"]+)",\s*envPrefix\s*\+\s*"([A-Z0-9_]+)"\)')
 
@@ -74,7 +78,7 @@ def main(argv):
 
     if errors:
         print("\n".join(errors))
-        sys.exit(1)
+        sys.exit(MISSING)
     print(f"All {len(bound)} qui environment settings are covered")
 
 

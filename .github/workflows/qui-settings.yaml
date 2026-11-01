@@ -46,12 +46,14 @@ jobs:
         run: |
           pip install --disable-pip-version-check pyyaml==6.0.3
           helm dependency build charts/qui
-          if python3 hack/check-qui-config.py > report.txt 2>&1; then
-            echo "missing=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "missing=true" >> "$GITHUB_OUTPUT"
-          fi
+          status=0
+          python3 hack/check-qui-config.py > report.txt 2>&1 || status=$?
           cat report.txt
+          case "$status" in
+            0) echo "missing=false" >> "$GITHUB_OUTPUT" ;;
+            3) echo "missing=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::The check itself failed (exit $status); see the log above"; exit "$status" ;;
+          esac
 
       - name: Open or update the issue
         if: steps.check.outputs.missing == 'true'
