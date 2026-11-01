@@ -14,7 +14,7 @@ qui:
   # Put credentials in `qui.secret`.
   # @default -- see below
   config:
-    # -- Listen address.
+    # -- Listen address. Use `"::"` on IPv6-only clusters.
     host: "0.0.0.0"
     # -- (string) Serve qui from a sub path, for example `/qui/`.
     baseUrl:
@@ -103,6 +103,54 @@ qui:
   # -- Arguments appended to `controllers.qui.containers.app.args`, for example `["--pprof"]`.
   # For extra environment variables use `controllers.qui.containers.app.env` (map or list) and `envFrom`.
   extraArgs: []
+
+  # Prometheus Operator and Grafana integration. Each part needs its CRDs in the cluster.
+  # Any of them turns on the qui metrics server (`service.app.ports.metrics`).
+  monitoring:
+    serviceMonitor:
+      # -- Create a ServiceMonitor for the qui metrics endpoint.
+      enabled: false
+      # -- Scrape interval.
+      interval: 30s
+      # -- Scrape timeout.
+      scrapeTimeout: 10s
+      # -- ServiceMonitor labels, for example the label your Prometheus selects (`release: kube-prometheus-stack`).
+      labels: {}
+      # -- Fields merged into the scrape endpoint, for example `basicAuth` when `metricsBasicAuthUsers` is set.
+      endpoint: {}
+    prometheusRule:
+      # -- Create a PrometheusRule with alerts for qui and its qBittorrent instances.
+      enabled: false
+      # -- PrometheusRule labels, for example the label your Prometheus selects.
+      labels: {}
+      # -- Labels added to every alert, for example `severity` overrides or a team label.
+      alertLabels: {}
+      # -- Names of built-in alerts to leave out: `QuiDown`, `QuiQbittorrentInstanceDown`,
+      # `QuiCollectionErrors`, `QuiDatabaseWedgedTransactions`.
+      disabledAlerts: []
+      # -- Extra Prometheus rules added to the group. Strings are Helm-templated, so write
+      # Prometheus templates as `{{ "{{" }} $labels.instance_name {{ "}}" }}`.
+      additionalRules: []
+    grafanaDashboard:
+      # -- Create a Grafana Operator `GrafanaDashboard` with qui's official dashboard.
+      # The operator downloads it from `url`; the chart does not contain the dashboard.
+      enabled: false
+      # -- (string) Dashboard URL. Defaults to the dashboard of the qui version the chart deploys.
+      url:
+      # -- Name of the Grafana datasource that scrapes qui. It replaces the dashboard's `DS_PROMETHEUS` input.
+      datasourceName: Prometheus
+      # -- Selects the Grafana instances that get the dashboard (required by the operator).
+      instanceSelector:
+        matchLabels:
+          dashboards: grafana
+      # -- (string) Grafana folder title.
+      folder:
+      # -- How often the operator re-checks the dashboard.
+      resyncPeriod: 1h
+      # -- Allow Grafana instances in other namespaces to import it.
+      allowCrossNamespaceImport: false
+      # -- GrafanaDashboard labels.
+      labels: {}
 
   configFile:
     # -- Write `config.toml` before qui starts, for settings without a variable (for example `externalProgramAllowList`).

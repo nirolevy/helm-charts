@@ -369,6 +369,116 @@
               "items": {
                 "type": "string"
               }
+            },
+            "monitoring": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "serviceMonitor": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "interval": {
+                      "type": "string"
+                    },
+                    "scrapeTimeout": {
+                      "type": "string"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "endpoint": {
+                      "type": "object"
+                    }
+                  }
+                },
+                "prometheusRule": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "alertLabels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "disabledAlerts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "QuiDown",
+                          "QuiQbittorrentInstanceDown",
+                          "QuiCollectionErrors",
+                          "QuiDatabaseWedgedTransactions"
+                        ]
+                      }
+                    },
+                    "additionalRules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                },
+                "grafanaDashboard": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^$|^https?://"
+                    },
+                    "datasourceName": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "instanceSelector": {
+                      "type": "object"
+                    },
+                    "folder": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "resyncPeriod": {
+                      "type": "string"
+                    },
+                    "allowCrossNamespaceImport": {
+                      "type": "boolean"
+                    },
+                    "labels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         },

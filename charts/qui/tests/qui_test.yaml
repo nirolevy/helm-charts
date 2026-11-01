@@ -245,3 +245,30 @@ tests:
           path: spec.template.spec.volumes
           content: {name: qui-config-file, configMap: {name: qui-config-file}}
         documentSelector: {path: kind, value: Deployment}
+
+  - it: rejects more than one replica
+    set:
+      controllers.qui.replicas: 2
+    asserts:
+      - failedTemplate: {errorPattern: controllers.qui.replicas must be 0 or 1}
+
+  - it: rejects a named targetPort
+    set:
+      service.app.ports.http.targetPort: http
+    asserts:
+      - failedTemplate: {errorPattern: service.app.ports.http.targetPort must be a number}
+
+  - it: listens on a numeric targetPort
+    documentSelector: {path: kind, value: Deployment}
+    set:
+      service.app.ports.http.targetPort: 8080
+    asserts:
+      - contains: {path: "spec.template.spec.containers[0].env", content: {name: QUI__PORT, value: "8080"}}
+
+  - it: keeps chart object names when users add objects of the same kind
+    set:
+      qui.secret.values.sessionSecret: x
+      secrets.other.stringData.a: b
+    asserts:
+      - equal: {path: metadata.name, value: qui-env}
+        documentSelector: {path: stringData.QUI__SESSION_SECRET, value: x}

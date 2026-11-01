@@ -28,7 +28,8 @@ Then open the UI and create the admin account:
 kubectl --namespace qui port-forward svc/qui 7476
 ```
 
-Requirements: Kubernetes `{{ template "chart.kubeVersion" . }}`, Helm 3.8 or later.
+Requirements: Kubernetes `{{ template "chart.kubeVersion" . }}` and Helm 4. Helm 3.22 also works, but Helm 3 is end-of-life,
+and Helm 3.18 fails inside the common library. CI tests with Helm 4 only.
 
 ## How the chart works
 
@@ -49,7 +50,7 @@ On top of the library, the chart adds `qui`:
 The chart also sets the listen port from `service.app.ports.http`, enables the metrics server when
 `service.app.ports.metrics` is enabled, and sends probes with `Host: localhost` so `allowedHosts` cannot block them.
 
-Settings set through variables are locked in the qui UI.
+When a variable sets a log setting, qui locks that field in its UI.
 
 For anything else, use the library directly: `controllers.qui.containers.app.env`, `envFrom`, `args`, `command`,
 extra `persistence` entries, sidecars under `controllers.qui.containers`, init containers, or `rawResources`.
@@ -160,25 +161,64 @@ defaultPodOptions:
 
 Then enable **Local Filesystem Access** for the instance in the qui UI.
 
-### Prometheus metrics
+### Monitoring
+
+qui exports Prometheus metrics for itself and every qBittorrent instance
+([metric reference](https://getqui.com/docs/advanced/metrics)). Turn on the parts you have the CRDs for;
+each one also turns on the qui metrics server:
 
 ```yaml
-service:
-  app:
-    ports:
-      metrics:
-        enabled: true
-serviceMonitor:
-  app:
-    labels:
-      release: kube-prometheus-stack
-    service:
-      identifier: app
-    endpoints:
-      - port: metrics
-        path: /metrics
-        interval: 30s
+qui:
+  monitoring:
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack # the label your Prometheus selects
+    prometheusRule:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack
+    grafanaDashboard: # needs the Grafana Operator
+      enabled: true
+      datasourceName: Prometheus
+      instanceSelector:
+        matchLabels:
+          dashboards: grafana
 ```
+
+The PrometheusRule has these alerts: `QuiDown` (Prometheus cannot scrape qui), `QuiQbittorrentInstanceDown`,
+`QuiCollectionErrors` and `QuiDatabaseWedgedTransactions`. Leave some out with `disabledAlerts`, label them with
+`alertLabels`, and add your own with `additionalRules`. A disabled qBittorrent instance also counts as down.
+
+The dashboard is qui's official one. The Grafana Operator downloads it from the qui repository, at the qui version the
+chart deploys, and fills in your datasource. The chart does not contain it.
+
+Without the Grafana Operator, let the [Grafana Helm chart](https://github.com/grafana-community/helm-charts/tree/main/charts/grafana)
+(also used by kube-prometheus-stack) download it. Use the qui version you deploy in the URL and your Prometheus
+datasource UID as the value:
+
+```yaml
+# Grafana chart values (under `grafana:` in kube-prometheus-stack)
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: qui
+        folder: qui
+        type: file
+        options:
+          path: /var/lib/grafana/dashboards/qui
+dashboards:
+  qui:
+    qui:
+      url: https://raw.githubusercontent.com/autobrr/qui/<qui version>/documentation/static/examples/qui-grafana-dashboard.json
+      datasource:
+        - name: DS_PROMETHEUS
+          value: <Prometheus datasource UID>
+```
+
+If you set `metricsBasicAuthUsers` in `qui.secret`, add the credentials to the scrape with
+`qui.monitoring.serviceMonitor.endpoint.basicAuth`.
 
 ### Settings without a variable
 
