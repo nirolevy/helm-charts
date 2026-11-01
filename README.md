@@ -48,7 +48,7 @@ gh attestation verify <chart>-<version>.tgz --repo nirolevy/helm-charts
 - **CI**: [pre-commit](.pre-commit-config.yaml) hooks (yamllint, helm-docs, actionlint, zizmor, gitleaks, Renovate config),
   [chart-testing](https://github.com/helm/chart-testing) lint with a version-bump check,
   [helm-unittest](https://github.com/helm-unittest/helm-unittest), and `ct install` with `helm test` and upgrade tests on
-  [kind](https://kind.sigs.k8s.io) for three Kubernetes versions.
+  [kind](https://kind.sigs.k8s.io) for three supported Kubernetes versions.
 - **Releases**: [chart-releaser](https://github.com/helm/chart-releaser-action) publishes each new chart version as a GitHub release and in the
   Pages index. The same package is pushed to `ghcr.io`, signed and attested.
 - **Updates**: [Renovate](https://docs.renovatebot.com) opens pull requests for new app releases, the common library, actions, hooks
