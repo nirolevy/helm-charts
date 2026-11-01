@@ -6,7 +6,9 @@
   ],
   labels: ['dependencies'],
   timezone: 'Etc/UTC',
-  schedule: ['* 0-6 * * *'],
+  // No schedule: updates open as soon as Renovate sees them and merge when CI passes.
+  // The repository allows rebase merges only.
+  automergeStrategy: 'rebase',
   dependencyDashboard: true,
   'pre-commit': {
     enabled: true,

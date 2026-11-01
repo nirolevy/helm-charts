@@ -2,7 +2,7 @@
 
 ## Checklist
 
-- [ ] The pull request title follows Conventional Commits, for example `fix(qui): ...`.
+- [ ] Each commit message follows Conventional Commits, for example `fix(qui): ...` (pull requests are rebase-merged).
 - [ ] I bumped `version` in each changed chart's `Chart.yaml`.
 - [ ] I added or updated unit tests.
 - [ ] `pre-commit run --all-files` passes (it regenerates the chart READMEs).
