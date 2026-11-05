@@ -36,7 +36,7 @@ repos:
         args: [--persona=pedantic]
 
   - repo: https://github.com/renovatebot/pre-commit-hooks
-    rev: a272277552ea68b97f47e7e0de965ca069ed84ef # frozen: 44.216.4
+    rev: fbfdaed5c11d5e57988fb2ddd1e09f43805e9b5a # frozen: 44.218.0
     hooks:
       - id: renovate-config-validator
         args: [--strict]
