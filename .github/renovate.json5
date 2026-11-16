@@ -4,35 +4,38 @@
     'config:best-practices',
     ':semanticCommits',
   ],
-  labels: ['dependencies'],
-  // No schedule: updates open as soon as Renovate sees them and merge when CI passes.
-  // The repository allows rebase merges only.
+  labels: [
+    'dependencies',
+  ],
   automergeStrategy: 'rebase',
-  // Rebuild a PR whenever main moves, so its chart version bump is computed from the current
-  // main. Without this, two PRs bump to the same version and both merge.
   rebaseWhen: 'behind-base-branch',
-  dependencyDashboard: true,
-  // There are no lock files (Chart.lock is not committed).
+  dependencyDashboard: {
+    enabled: true,
+  },
   lockFileMaintenance: {
     enabled: false,
   },
   'pre-commit': {
     enabled: true,
   },
-  // The default ignores every **/tests/** path, which hides the helm test pod image in templates/tests/.
-  ignorePaths: ['**/node_modules/**', '**/vendor/**'],
+  ignorePaths: [
+    '**/node_modules/**',
+    '**/vendor/**',
+  ],
   'helm-values': {
-    // Also the chart-testing values files, for example ci/postgres-values.yaml.
-    managerFilePatterns: ['/(^|/)ci/[^/]+-values\\.ya?ml$/'],
+    managerFilePatterns: [
+      '/(^|/)ci/[^/]+-values\\.ya?ml$/',
+    ],
   },
   customManagers: [
     {
       customType: 'regex',
       description: 'App image in Chart.yaml: appVersion and the Artifact Hub image annotation',
-      managerFilePatterns: ['/(^|/)charts/[^/]+/Chart\\.yaml$/'],
+      managerFilePatterns: [
+        '/(^|/)charts/[^/]+/Chart\\.yaml$/',
+      ],
       matchStrings: [
         '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\nappVersion: "?(?<currentValue>[^"\\s]+)"?',
-        // The artifacthub.io/images annotation: the only `image:` lines in a Chart.yaml.
         '\\n\\s+image: (?<depName>[^\\s:]+):(?<currentValue>[^\\s@]+)',
       ],
       datasourceTemplate: 'docker',
@@ -40,22 +43,32 @@
     {
       customType: 'regex',
       description: 'bjw-s common library schema reference, kept in step with the dependency',
-      managerFilePatterns: ['/(^|/)charts/[^/]+/values\\.schema\\.json$/'],
-      matchStrings: ['bjw-s-labs/helm-charts/common-(?<currentValue>\\d+\\.\\d+\\.\\d+)/'],
+      managerFilePatterns: [
+        '/(^|/)charts/[^/]+/values\\.schema\\.json$/',
+      ],
+      matchStrings: [
+        'bjw-s-labs/helm-charts/common-(?<currentValue>\\d+\\.\\d+\\.\\d+)/',
+      ],
       depNameTemplate: 'ghcr.io/bjw-s-labs/helm/common',
       datasourceTemplate: 'docker',
     },
     {
       customType: 'regex',
       description: 'Images in chart templates, for example the helm test image',
-      managerFilePatterns: ['/(^|/)charts/[^/]+/templates/.+\\.yaml$/'],
-      matchStrings: ['image: (?<depName>docker\\.io/[\\w./-]+):(?<currentValue>[\\w.-]+)'],
+      managerFilePatterns: [
+        '/(^|/)charts/[^/]+/templates/.+\\.yaml$/',
+      ],
+      matchStrings: [
+        'image: (?<depName>docker\\.io/[\\w./-]+):(?<currentValue>[\\w.-]+)',
+      ],
       datasourceTemplate: 'docker',
     },
     {
       customType: 'regex',
       description: 'Tool versions in workflows: a `# renovate:` comment above `NAME: version`',
-      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
+      managerFilePatterns: [
+        '/^\\.github/workflows/.+\\.ya?ml$/',
+      ],
       matchStrings: [
         '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\\n\\s*[A-Z_]+: "?(?<currentValue>[^"\\s]+)"?',
       ],
@@ -63,86 +76,136 @@
     {
       customType: 'regex',
       description: 'kind node images in the test matrix',
-      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
-      matchStrings: ['(?<depName>kindest/node):(?<currentValue>[\\w.-]+)@(?<currentDigest>sha256:[a-f0-9]{64})'],
+      managerFilePatterns: [
+        '/^\\.github/workflows/.+\\.ya?ml$/',
+      ],
+      matchStrings: [
+        '(?<depName>kindest/node):(?<currentValue>[\\w.-]+)@(?<currentDigest>sha256:[a-f0-9]{64})',
+      ],
       datasourceTemplate: 'docker',
     },
     {
       customType: 'regex',
       description: 'Pinned pip packages in workflows',
-      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
-      matchStrings: ['pip install [^\\n]*?(?<depName>pyyaml)==(?<currentValue>[\\w.]+)'],
+      managerFilePatterns: [
+        '/^\\.github/workflows/.+\\.ya?ml$/',
+      ],
+      matchStrings: [
+        'pip install [^\\n]*?(?<depName>pyyaml)==(?<currentValue>[\\w.]+)',
+      ],
       datasourceTemplate: 'pypi',
     },
   ],
   packageRules: [
     {
       description: 'App and library updates: the chart version follows the size of the update',
-      matchFileNames: ['charts/*/Chart.yaml', 'charts/*/values.schema.json'],
+      matchFileNames: [
+        'charts/*/Chart.yaml',
+        'charts/*/values.schema.json',
+      ],
       bumpVersions: [
         {
           name: 'chart version',
-          filePatterns: ['{{packageFileDir}}/Chart.yaml'],
-          matchStrings: ['\\nversion:\\s(?<version>[^\\s]+)'],
-          // Upstream major -> chart major, patch -> patch, anything else -> minor.
+          filePatterns: [
+            '{{packageFileDir}}/Chart.yaml',
+          ],
+          matchStrings: [
+            '\\nversion:\\s(?<version>[^\\s]+)',
+          ],
           bumpType: '{{#if isMajor}}major{{else}}{{#if isPatch}}patch{{else}}minor{{/if}}{{/if}}',
         },
       ],
     },
     {
       description: 'Test-only images (ci/ values, the helm test pod): a patch chart version, whatever the update',
-      matchFileNames: ['charts/*/ci/**', 'charts/*/templates/**'],
+      matchFileNames: [
+        'charts/*/ci/**',
+        'charts/*/templates/**',
+      ],
       bumpVersions: [
         {
           name: 'chart version',
-          // The chart root, from charts/<chart>/ci or charts/<chart>/templates/...
-          filePatterns: ["{{replace '/(templates|ci)(/.*)?$' '' packageFileDir}}/Chart.yaml"],
-          matchStrings: ['\\nversion:\\s(?<version>[^\\s]+)'],
+          filePatterns: [
+            "{{replace '/(templates|ci)(/.*)?$' '' packageFileDir}}/Chart.yaml",
+          ],
+          matchStrings: [
+            '\\nversion:\\s(?<version>[^\\s]+)',
+          ],
           bumpType: 'patch',
         },
       ],
     },
     {
       description: 'bjw-s common library: dependency and schema reference in one PR',
-      matchPackageNames: ['ghcr.io/bjw-s-labs/helm/common'],
+      matchPackageNames: [
+        'ghcr.io/bjw-s-labs/helm/common',
+      ],
       groupName: 'bjw-s common library',
       pinDigests: false,
     },
     {
       description: 'The image tag in values.yaml is {{ .Chart.AppVersion }}; appVersion in Chart.yaml carries the update',
-      matchManagers: ['helm-values'],
-      matchFileNames: ['charts/*/values.yaml'],
+      matchManagers: [
+        'helm-values',
+      ],
+      matchFileNames: [
+        'charts/*/values.yaml',
+      ],
       matchCurrentValue: '/\\{\\{/',
       enabled: false,
     },
     {
       description: 'qui releases',
-      matchPackageNames: ['ghcr.io/autobrr/qui'],
+      matchPackageNames: [
+        'ghcr.io/autobrr/qui',
+      ],
       groupName: 'qui',
-      addLabels: ['qui'],
+      addLabels: [
+        'qui',
+      ],
       allowedVersions: '/^v\\d+\\.\\d+\\.\\d+$/',
       pinDigests: false,
     },
     {
       description: 'Plain tags in chart templates and ci values',
-      matchFileNames: ['charts/**'],
-      matchDatasources: ['docker'],
+      matchFileNames: [
+        'charts/**',
+      ],
+      matchDatasources: [
+        'docker',
+      ],
       pinDigests: false,
     },
     {
       description: 'Automerge every update once the required "CI OK" check passes',
-      matchUpdateTypes: ['major', 'minor', 'patch', 'digest', 'pinDigest', 'lockFileMaintenance'],
+      matchUpdateTypes: [
+        'major',
+        'minor',
+        'patch',
+        'digest',
+        'pinDigest',
+        'lockFileMaintenance',
+      ],
       automerge: true,
     },
     {
       description: 'Label major updates: they merge automatically and release a major chart version',
-      matchUpdateTypes: ['major'],
-      addLabels: ['major'],
+      matchUpdateTypes: [
+        'major',
+      ],
+      addLabels: [
+        'major',
+      ],
     },
     {
       description: 'kind node images: only patch updates inside the tested minor versions',
-      matchPackageNames: ['kindest/node'],
-      matchUpdateTypes: ['major', 'minor'],
+      matchPackageNames: [
+        'kindest/node',
+      ],
+      matchUpdateTypes: [
+        'major',
+        'minor',
+      ],
       enabled: false,
     },
   ],
