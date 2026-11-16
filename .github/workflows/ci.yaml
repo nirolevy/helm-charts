@@ -25,7 +25,7 @@ env:
   # renovate: datasource=github-releases depName=prometheus-operator/prometheus-operator
   PROMETHEUS_OPERATOR_VERSION: v0.95.2
   # renovate: datasource=github-releases depName=grafana/grafana-operator
-  GRAFANA_OPERATOR_VERSION: v5.25.0
+  GRAFANA_OPERATOR_VERSION: v5.26.0
 
 jobs:
   pre-commit:
