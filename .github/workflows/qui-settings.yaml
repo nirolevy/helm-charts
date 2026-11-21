@@ -44,7 +44,7 @@ jobs:
       - name: Compare with the deployed qui version
         id: check
         run: |
-          pip install --disable-pip-version-check pyyaml==6.0.3
+          pip install --disable-pip-version-check pyyaml==6.0.4
           helm dependency build charts/qui
           status=0
           python3 hack/check-qui-config.py > report.txt 2>&1 || status=$?
