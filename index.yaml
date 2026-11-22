@@ -5,6 +5,46 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/images: |
         - name: qui
+          image: ghcr.io/autobrr/qui:v1.36.1
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: qui documentation
+          url: https://getqui.com
+        - name: qui source
+          url: https://github.com/autobrr/qui
+        - name: bjw-s common library (app-template) documentation
+          url: https://bjw-s-labs.github.io/helm-charts/docs/app-template/
+    apiVersion: v2
+    appVersion: v1.36.1
+    created: "2026-11-22T13:45:18.982187867Z"
+    dependencies:
+    - name: common
+      repository: oci://ghcr.io/bjw-s-labs/helm
+      version: 5.3.0
+    description: qui, a fast, modern web interface for managing multiple qBittorrent
+      instances
+    digest: df25e5365465c2075207feec64a8285488a3177de23532f4c8a42cc80764a5ff
+    home: https://getqui.com
+    icon: https://raw.githubusercontent.com/autobrr/qui/main/web/public/icon.png
+    keywords:
+    - qui
+    - qbittorrent
+    - torrent
+    - autobrr
+    - cross-seed
+    kubeVersion: '>=1.31.0-0'
+    name: qui
+    sources:
+    - https://github.com/nirolevy/helm-charts
+    - https://github.com/autobrr/qui
+    type: application
+    urls:
+    - https://github.com/nirolevy/helm-charts/releases/download/qui-0.5.1/qui-0.5.1.tgz
+    version: 0.5.1
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/images: |
+        - name: qui
           image: ghcr.io/autobrr/qui:v1.36.0
       artifacthub.io/license: Apache-2.0
       artifacthub.io/links: |
@@ -401,4 +441,4 @@ entries:
     urls:
     - https://github.com/nirolevy/helm-charts/releases/download/qui-0.1.1/qui-0.1.1.tgz
     version: 0.1.1
-generated: "2026-11-21T06:00:54.151472985Z"
+generated: "2026-11-22T13:45:18.982244543Z"
